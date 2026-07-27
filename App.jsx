@@ -523,15 +523,17 @@ function PasswordGate({onPass}){
   };
 
   return(
-    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui,sans-serif",padding:16}}>
+    <div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui,sans-serif",padding:16,position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",inset:0,backgroundImage:"url(/team-bg.jpg)",backgroundSize:"cover",backgroundPosition:"center",opacity:0.12}}/>
+      <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(15,41,82,0.85) 0%,rgba(15,41,82,0.95) 100%)"}}/>
       <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}`}</style>
-      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:16,padding:"40px 36px",width:"100%",maxWidth:400,boxShadow:"0 8px 32px rgba(15,41,82,0.10)",textAlign:"center",animation:shake?"shake 0.5s ease":"none"}}>
+      <div style={{position:"relative",zIndex:1,background:"rgba(255,255,255,0.07)",backdropFilter:"blur(12px)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:16,padding:"40px 36px",width:"100%",maxWidth:400,boxShadow:"0 8px 32px rgba(0,0,0,0.3)",textAlign:"center",animation:shake?"shake 0.5s ease":"none"}}>
         <div style={{marginBottom:20}}>
-          <img src="/nic-logo.png" alt="NIC" style={{height:80,objectFit:"contain"}}/>
+          <img src="/nic-logo.png" alt="NIC" style={{height:80,objectFit:"contain",filter:"brightness(10)"}}/>
         </div>
-        <div style={{height:1,background:C.border,marginBottom:24}}/>
-        <h2 style={{fontSize:18,fontWeight:700,color:C.text,margin:"0 0 6px"}}>Recruitment Portal</h2>
-        <p style={{fontSize:13,color:C.textMid,marginBottom:24}}>Enter the access password to continue</p>
+        <div style={{height:1,background:"rgba(255,255,255,0.1)",marginBottom:24}}/>
+        <h2 style={{fontSize:18,fontWeight:700,color:"#fff",margin:"0 0 6px"}}>Recruitment Portal</h2>
+        <p style={{fontSize:13,color:"rgba(255,255,255,0.5)",marginBottom:24}}>Enter the access password to continue</p>
         <input
           type="password"
           value={input}
@@ -539,14 +541,14 @@ function PasswordGate({onPass}){
           onKeyDown={e=>e.key==="Enter"&&attempt()}
           placeholder="Password"
           autoFocus
-          style={{width:"100%",border:`1.5px solid ${error?C.red:C.border}`,borderRadius:9,padding:"11px 14px",fontSize:15,color:C.text,outline:"none",marginBottom:error?8:16,textAlign:"center",letterSpacing:2,background:error?"#fef2f2":"#fff",transition:"border 0.2s"}}
+          style={{width:"100%",border:`1.5px solid ${error?"#ef4444":"rgba(255,255,255,0.2)"}`,borderRadius:9,padding:"11px 14px",fontSize:15,color:"#fff",outline:"none",marginBottom:error?8:16,textAlign:"center",letterSpacing:2,background:error?"rgba(239,68,68,0.15)":"rgba(255,255,255,0.08)",transition:"border 0.2s"}}
         />
-        {error&&<p style={{color:C.red,fontSize:13,marginBottom:12,fontWeight:600}}>Incorrect password. Try again.</p>}
+        {error&&<p style={{color:"#fca5a5",fontSize:13,marginBottom:12,fontWeight:600}}>Incorrect password. Try again.</p>}
         <button onClick={attempt}
-          style={{width:"100%",padding:"12px",background:C.navy,color:"#fff",border:"none",borderRadius:9,fontSize:15,fontWeight:700,cursor:"pointer"}}>
+          style={{width:"100%",padding:"12px",background:"#fff",color:C.navy,border:"none",borderRadius:9,fontSize:15,fontWeight:700,cursor:"pointer"}}>
           Enter →
         </button>
-        <p style={{fontSize:11,color:C.textLt,marginTop:16}}>NIC — Undergraduate Division</p>
+        <p style={{fontSize:11,color:"rgba(255,255,255,0.3)",marginTop:16}}>NIC — Undergraduate Division</p>
       </div>
     </div>
   );
@@ -557,24 +559,60 @@ function LoginScreen({members,onLogin}){
   const [sel,setSel]=useState(null);
   const presidents=members.filter(m=>m.role==="president");
   const regular=members.filter(m=>m.role!=="president");
-  const Btn=({m})=>(
-    <button onClick={()=>setSel(m)} style={{display:"flex",alignItems:"center",gap:9,padding:"10px 13px",background:sel?.id===m.id?C.navy:C.bg,border:`1.5px solid ${sel?.id===m.id?C.navy:C.border}`,borderRadius:10,cursor:"pointer",color:sel?.id===m.id?"#fff":C.text,width:"100%"}}>
-      <span style={{width:28,height:28,borderRadius:"50%",background:sel?.id===m.id?"rgba(255,255,255,0.2)":C.border,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0,color:sel?.id===m.id?"#fff":C.navy}}>{initials(m.name)}</span>
-      <span style={{fontSize:13,fontWeight:600}}>{m.name}</span>
-      {m.role==="president"&&<span style={{marginLeft:"auto",fontSize:9,background:sel?.id===m.id?"rgba(255,255,255,0.2)":"#e0e8f7",color:sel?.id===m.id?"#fff":C.navy,borderRadius:4,padding:"2px 7px",letterSpacing:1,fontWeight:700}}>PRES</span>}
-    </button>
-  );
+
+  const handleLogin=()=>{if(sel)onLogin(sel);};
+
   return(
-    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui,sans-serif",padding:16}}>
-      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:16,padding:"36px 30px",width:"100%",maxWidth:520,boxShadow:"0 8px 32px rgba(15,41,82,0.10)"}}>
-        <div style={{textAlign:"center",marginBottom:22}}><img src="/nic-logo.png" alt="NIC" style={{height:80,objectFit:"contain"}}/></div>
-        <div style={{height:1,background:C.border,marginBottom:22}}/>
-        <h2 style={{fontSize:20,fontWeight:700,color:C.text,margin:"0 0 6px",textAlign:"center"}}>Recruitment Portal</h2>
-        <p style={{fontSize:13,color:C.textMid,marginBottom:22,textAlign:"center"}}>Select your profile to continue</p>
-        {presidents.length>0&&<><div style={{fontSize:10,color:C.textLt,letterSpacing:2,fontWeight:700,marginBottom:8}}>CO-PRESIDENTS</div><div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>{presidents.map(m=><Btn key={m.id} m={m}/>)}</div></>}
-        <div style={{fontSize:10,color:C.textLt,letterSpacing:2,fontWeight:700,marginBottom:8}}>MEMBERS</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:6,marginBottom:24}}>{regular.map(m=><Btn key={m.id} m={m}/>)}</div>
-        <button onClick={()=>sel&&onLogin(sel)} disabled={!sel} style={{width:"100%",padding:"12px",background:sel?C.navy:"#c5cedc",color:"#fff",border:"none",borderRadius:9,fontSize:15,fontWeight:700,cursor:sel?"pointer":"not-allowed"}}>Enter Portal →</button>
+    <div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui,sans-serif",padding:16,position:"relative",overflow:"hidden"}}>
+      {/* Background team photo */}
+      <div style={{position:"absolute",inset:0,backgroundImage:"url(/team-bg.jpg)",backgroundSize:"cover",backgroundPosition:"center",opacity:0.12}}/>
+      <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(15,41,82,0.85) 0%,rgba(15,41,82,0.95) 100%)"}}/>
+
+      <div style={{position:"relative",zIndex:1,width:"100%",maxWidth:560}}>
+        {/* Header */}
+        <div style={{textAlign:"center",marginBottom:20}}>
+          <img src="/nic-logo.png" alt="NIC" style={{height:72,objectFit:"contain",filter:"brightness(10)"}}/>
+          <h2 style={{fontSize:20,fontWeight:700,color:"#fff",margin:"12px 0 4px"}}>Recruitment Portal</h2>
+          <p style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>Select your profile to continue</p>
+        </div>
+
+        {/* Card with scrollable member list */}
+        <div style={{background:"rgba(255,255,255,0.07)",backdropFilter:"blur(12px)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:16,padding:"20px 22px",maxHeight:"60vh",overflowY:"auto"}}>
+          {/* Presidents */}
+          {presidents.length>0&&(
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",letterSpacing:2,fontWeight:700,marginBottom:8}}>CO-PRESIDENTS</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {presidents.map(m=>(
+                  <button key={m.id} onClick={()=>setSel(m)}
+                    style={{flex:"1 1 180px",display:"flex",alignItems:"center",gap:8,padding:"9px 12px",background:sel?.id===m.id?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.06)",border:`1.5px solid ${sel?.id===m.id?"rgba(255,255,255,0.5)":"rgba(255,255,255,0.1)"}`,borderRadius:9,cursor:"pointer",color:"#fff"}}>
+                    <span style={{width:26,height:26,borderRadius:"50%",background:sel?.id===m.id?"rgba(255,255,255,0.3)":"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>{initials(m.name)}</span>
+                    <span style={{fontSize:12,fontWeight:600}}>{m.name}</span>
+                    <span style={{marginLeft:"auto",fontSize:8,background:"rgba(255,255,255,0.15)",borderRadius:3,padding:"2px 5px",letterSpacing:1,fontWeight:700}}>PRES</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Members */}
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",letterSpacing:2,fontWeight:700,marginBottom:8}}>MEMBERS</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:5}}>
+            {regular.map(m=>(
+              <button key={m.id} onClick={()=>setSel(m)}
+                style={{display:"flex",alignItems:"center",gap:7,padding:"8px 10px",background:sel?.id===m.id?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.04)",border:`1.5px solid ${sel?.id===m.id?"rgba(255,255,255,0.5)":"rgba(255,255,255,0.08)"}`,borderRadius:8,cursor:"pointer",color:sel?.id===m.id?"#fff":"rgba(255,255,255,0.7)"}}>
+                <span style={{width:24,height:24,borderRadius:"50%",background:sel?.id===m.id?"rgba(255,255,255,0.3)":"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,flexShrink:0,color:sel?.id===m.id?"#fff":"rgba(255,255,255,0.5)"}}>{initials(m.name)}</span>
+                <span style={{fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Enter button — always visible, fixed outside scroll area */}
+        <button onClick={handleLogin} disabled={!sel}
+          style={{width:"100%",padding:"13px",marginTop:16,background:sel?"#fff":"rgba(255,255,255,0.15)",color:sel?C.navy:"rgba(255,255,255,0.3)",border:"none",borderRadius:10,fontSize:15,fontWeight:700,cursor:sel?"pointer":"not-allowed",boxShadow:sel?"0 4px 16px rgba(0,0,0,0.2)":"none",transition:"all 0.2s"}}>
+          {sel?`Enter as ${sel.name} →`:"Select your name above"}
+        </button>
       </div>
     </div>
   );
