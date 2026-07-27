@@ -141,25 +141,48 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── CSV column map ────────────────────────────────────────────────────────────
-const COL = {
-  timestamp: "Coluna 1",
-  student:   "What is your student number?",
-  email:     "What is your institutional email?",
-  phone:     "What is your phone number?",
-  cv:        "Please upload your CV.",
-  b1:        "Tell us about yourself. What motivates you? How are you different from other applicants? Where do you see yourself in five years?  (Max 750 characters)",
-  b2:        "What makes you want to join NIC-UD? Why do you think you could be a valuable member for the club? How are you different from other applicants? (Max 750 characters)",
-  t1:        "If you had \u20AC100,000 to invest, how would you allocate this capital across different asset classes or markets to build a solid, future-proof portfolio? Please explain your choices by considering current macroeconomic trends and some key fundamentals. (Max 1000 characters)",
+// ── CSV column mapping (supports both old Google Forms and new Microsoft Forms) ──
+// Microsoft Forms exports use the question text as column headers.
+// We try multiple variants to match flexibly.
+const COL_VARIANTS = {
+  name:      ["Name","Full name","Full Name","Nome","Nome completo","What is your full name?"],
+  student:   ["Student ID","Student number","What is your student number?","Número de aluno"],
+  email:     ["Student email address","What is your institutional email?","Email","E-mail"],
+  phone:     ["Phone number","What is your phone number?","Telefone","Phone"],
+  cv:        ["Upload CV","Please upload your CV.","CV","Curriculum"],
+  b1:        ["Tell us about yourself. What motivates you? How are you different from other applicants? Where do you see yourself in five years? (Max 750 characters)"],
+  b2:        ["What makes you want to join NIC-UD? Why do you think you could be a valuable member for the club? How are you different from other applicants? (Max 750 characters)"],
+  b3:        ["What's one thing you pursued during your Bachelor's that wasn't required, and what motivated you to do it? (Max 750 characters)",
+              "What\u2019s one thing you pursued during your Bachelor\u2019s that wasn\u2019t required, and what motivated you to do it? (Max 750 characters)"],
+  t1:        ["Choose a stock from the NIC-UD fund and explain to us why it might be a bad investment. (Max 500 characters)",
+              "If you had \u20AC100,000 to invest, how would you allocate this capital across different asset classes or markets to build a solid, future-proof portfolio? Please explain your choices by considering current macroeconomic trends and some key fundamentals. (Max 1000 characters)"],
+  comments:  ["Additional Comments/Questions","Additional Comments","Comments"],
+  timestamp: ["Coluna 1","Start time","Completion time","Timestamp","ID"],
 };
-const NAME_COLS = ["Full name","Name","What is your full name?","Full Name","Nome","Nome completo"];
-function extractName(row) { for (const col of NAME_COLS) { if (row[col]?.trim()) return row[col].trim(); } return null; }
+
+// Flexibly find a column value from a CSV row
+function getCol(row, key) {
+  const variants = COL_VARIANTS[key] || [];
+  for (const v of variants) {
+    if (row[v] !== undefined && row[v] !== null) return row[v];
+  }
+  // Fuzzy: try partial match on column headers
+  const headers = Object.keys(row);
+  for (const v of variants) {
+    const found = headers.find(h => h.toLowerCase().includes(v.toLowerCase().slice(0, 30)));
+    if (found && row[found]) return row[found];
+  }
+  return "";
+}
+function extractName(row) { return getCol(row, "name") || null; }
 function displayName(c) { return c?.full_name && c.full_name !== c.student_number ? c.full_name : `#${c?.student_number}`; }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const QUESTIONS = [
-  { id:"b1", label:"About Yourself", sublabel:"Motivation & Differentiation"   },
-  { id:"b2", label:"Why NIC-UD?",    sublabel:"Fit & Value Add"                },
-  { id:"t1", label:"Technical",      sublabel:"\u20AC100k Portfolio Allocation" },
+  { id:"b1", label:"About Yourself",    sublabel:"Motivation & Differentiation"          },
+  { id:"b2", label:"Why NIC-UD?",       sublabel:"Fit & Value Add"                       },
+  { id:"b3", label:"Beyond Required",   sublabel:"Initiative & Self-Motivation"          },
+  { id:"t1", label:"Technical",         sublabel:"Stock Analysis — Bad Investment Thesis" },
 ];
 const VERDICTS = [
   { id:"pass",       label:"Pass",       color:"#16a34a", bg:"#dcfce7" },
@@ -188,10 +211,10 @@ function scoreAI(text) {
   return Math.max(0,Math.min(100,s));
 }
 function detectAI(candidate) {
-  const b1=scoreAI(candidate.b1),b2=scoreAI(candidate.b2),t1=scoreAI(candidate.t1);
-  const overall=Math.round((b1+b2+t1)/3);
+  const b1=scoreAI(candidate.b1),b2=scoreAI(candidate.b2),b3=scoreAI(candidate.b3),t1=scoreAI(candidate.t1);
+  const overall=Math.round((b1+b2+b3+t1)/4);
   const flags=overall>=70?"Multiple AI-associated patterns detected.":overall>=40?"Some formal phrasing — review manually.":"No strong AI patterns detected.";
-  return {b1,b2,t1,overall,flags};
+  return {b1,b2,b3,t1,overall,flags};
 }
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
@@ -274,7 +297,7 @@ function AnswersModal({candidate,aiScores,onClose}){
         {ai?.overall_pct!=null&&(
           <div style={{display:"flex",gap:12,padding:"10px 22px",background:C.bg,borderBottom:`1px solid ${C.border}`,flexShrink:0,flexWrap:"wrap",alignItems:"center"}}>
             <span style={{fontSize:10,color:C.textLt,fontWeight:700,letterSpacing:1}}>AI DETECTION</span>
-            {[["B1",ai.b1_pct],["B2",ai.b2_pct],["T1",ai.t1_pct],["Overall",ai.overall_pct]].map(([lbl,val])=>(
+            {[["B1",ai.b1_pct],["B2",ai.b2_pct],["B3",ai.b3_pct],["T1",ai.t1_pct],["Overall",ai.overall_pct]].map(([lbl,val])=>(
               <span key={lbl} style={{fontSize:12,fontWeight:700,color:aiColor(val)}}>{lbl}: {val}%</span>
             ))}
             {ai.flags&&<span style={{fontSize:11,color:C.textLt}}>· {ai.flags}</span>}
@@ -289,6 +312,13 @@ function AnswersModal({candidate,aiScores,onClose}){
               </div>
             </div>
           ))}
+          {/* Additional comments — not scored */}
+          {c.comments?.trim()&&(
+            <div style={{background:"#fffbeb",borderRadius:10,padding:16,borderLeft:"3px solid #fcd34d"}}>
+              <div style={{fontSize:10,color:C.amber,letterSpacing:2,fontWeight:700,marginBottom:8}}>ADDITIONAL COMMENTS (not scored)</div>
+              <div style={{fontSize:14,color:C.textMid,lineHeight:1.85,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{c.comments}</div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -447,7 +477,7 @@ function ImportPanel({onImport,loading,hasCandidates}){
     Papa.parse(f,{header:true,skipEmptyLines:true,complete:r=>{
       if(!r.data?.length){setErr("CSV appears empty.");return;}
       const seen={};
-      r.data.forEach(row=>{const sn=row[COL.student]?.trim();if(!sn||sn==="teste")return;if(!seen[sn]||row[COL.timestamp]>seen[sn][COL.timestamp])seen[sn]=row;});
+      r.data.forEach(row=>{const sn=getCol(row,"student")?.trim();if(!sn||sn==="teste")return;if(!seen[sn]||getCol(row,"timestamp")>getCol(seen[sn],"timestamp"))seen[sn]=row;});
       const deduped=Object.values(seen);
       if(!deduped.length){setErr("No valid candidates found.");return;}
       onImport(deduped);
@@ -680,15 +710,17 @@ export default function App(){
     setAllScores([]); setAiScores({}); setInterviewData([]); setAssignments([]); setPromoted({}); setChosenSet({}); setRevealed(false);
     const mapped=rows.map((r,i)=>({
       id:`c_${Date.now()}_${i}`,
-      full_name:extractName(r)||r[COL.student]||`Candidate ${i+1}`,
-      student_number:r[COL.student]||"",
-      email:r[COL.email]||"",
-      phone:r[COL.phone]||"",
-      cv_link:r[COL.cv]||"",
-      b1:r[COL.b1]||"",
-      b2:r[COL.b2]||"",
-      t1:r[COL.t1]||"",
-      submitted_at:r[COL.timestamp]||"",
+      full_name:extractName(r)||getCol(r,"student")||`Candidate ${i+1}`,
+      student_number:getCol(r,"student")||"",
+      email:getCol(r,"email")||"",
+      phone:getCol(r,"phone")||"",
+      cv_link:getCol(r,"cv")||"",
+      b1:getCol(r,"b1")||"",
+      b2:getCol(r,"b2")||"",
+      b3:getCol(r,"b3")||"",
+      t1:getCol(r,"t1")||"",
+      comments:getCol(r,"comments")||"",
+      submitted_at:getCol(r,"timestamp")||"",
     }));
     let{error}=await sb.from("candidates").insert(mapped);
     if(error?.message?.includes("column")){
@@ -714,7 +746,7 @@ export default function App(){
     setDetecting(true);
     const result=detectAI(candidate);
     setDetecting(false);
-    const row={candidate_id:candidate.id,b1_pct:result.b1,b2_pct:result.b2,t1_pct:result.t1,overall_pct:result.overall,flags:result.flags};
+    const row={candidate_id:candidate.id,b1_pct:result.b1,b2_pct:result.b2,b3_pct:result.b3,t1_pct:result.t1,overall_pct:result.overall,flags:result.flags};
     await sb.from("ai_scores").upsert(row,{onConflict:"candidate_id"});
     setAiScores(prev=>({...prev,[candidate.id]:row}));
   },[aiScores]);
