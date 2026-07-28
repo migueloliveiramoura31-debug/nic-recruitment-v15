@@ -524,8 +524,8 @@ function PasswordGate({onPass}){
 
   return(
     <div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui,sans-serif",padding:16,position:"relative",overflow:"hidden"}}>
-      <div style={{position:"absolute",inset:0,backgroundImage:"url(/team-bg.jpg)",backgroundSize:"cover",backgroundPosition:"center",opacity:0.18}}/>
-      <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(15,41,82,0.85) 0%,rgba(15,41,82,0.95) 100%)"}}/>
+      <div style={{position:"absolute",inset:0,backgroundImage:"url(/team-bg.jpg)",backgroundSize:"cover",backgroundPosition:"center",opacity:0.35}}/>
+      <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(15,41,82,0.55) 0%,rgba(15,41,82,0.75) 100%)"}}/>
       <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}`}</style>
       <div style={{position:"relative",zIndex:1,background:"rgba(255,255,255,0.07)",backdropFilter:"blur(12px)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:16,padding:"40px 36px",width:"100%",maxWidth:400,boxShadow:"0 8px 32px rgba(0,0,0,0.3)",textAlign:"center",animation:shake?"shake 0.5s ease":"none"}}>
         <div style={{marginBottom:20}}>
@@ -565,8 +565,8 @@ function LoginScreen({members,onLogin}){
   return(
     <div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui,sans-serif",padding:16,position:"relative",overflow:"hidden"}}>
       {/* Background team photo */}
-      <div style={{position:"absolute",inset:0,backgroundImage:"url(/team-bg.jpg)",backgroundSize:"cover",backgroundPosition:"center",opacity:0.18}}/>
-      <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(15,41,82,0.85) 0%,rgba(15,41,82,0.95) 100%)"}}/>
+      <div style={{position:"absolute",inset:0,backgroundImage:"url(/team-bg.jpg)",backgroundSize:"cover",backgroundPosition:"center",opacity:0.35}}/>
+      <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(15,41,82,0.55) 0%,rgba(15,41,82,0.75) 100%)"}}/>
 
       <div style={{position:"relative",zIndex:1,width:"100%",maxWidth:560}}>
         {/* Header */}
