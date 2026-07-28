@@ -524,12 +524,12 @@ function PasswordGate({onPass}){
 
   return(
     <div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui,sans-serif",padding:16,position:"relative",overflow:"hidden"}}>
-      <div style={{position:"absolute",inset:0,backgroundImage:"url(/team-bg.jpg)",backgroundSize:"cover",backgroundPosition:"center",opacity:0.12}}/>
+      <div style={{position:"absolute",inset:0,backgroundImage:"url(/team-bg.jpg)",backgroundSize:"cover",backgroundPosition:"center",opacity:0.18}}/>
       <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(15,41,82,0.85) 0%,rgba(15,41,82,0.95) 100%)"}}/>
       <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}`}</style>
       <div style={{position:"relative",zIndex:1,background:"rgba(255,255,255,0.07)",backdropFilter:"blur(12px)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:16,padding:"40px 36px",width:"100%",maxWidth:400,boxShadow:"0 8px 32px rgba(0,0,0,0.3)",textAlign:"center",animation:shake?"shake 0.5s ease":"none"}}>
         <div style={{marginBottom:20}}>
-          <img src="/nic-logo.png" alt="NIC" style={{height:80,objectFit:"contain",filter:"brightness(10)"}}/>
+          <div style={{display:"inline-block",background:"#fff",borderRadius:12,padding:"10px 18px"}}><img src="/nic-logo.png" alt="NIC" style={{height:60,objectFit:"contain"}}/></div>
         </div>
         <div style={{height:1,background:"rgba(255,255,255,0.1)",marginBottom:24}}/>
         <h2 style={{fontSize:18,fontWeight:700,color:"#fff",margin:"0 0 6px"}}>Recruitment Portal</h2>
@@ -565,13 +565,13 @@ function LoginScreen({members,onLogin}){
   return(
     <div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui,sans-serif",padding:16,position:"relative",overflow:"hidden"}}>
       {/* Background team photo */}
-      <div style={{position:"absolute",inset:0,backgroundImage:"url(/team-bg.jpg)",backgroundSize:"cover",backgroundPosition:"center",opacity:0.12}}/>
+      <div style={{position:"absolute",inset:0,backgroundImage:"url(/team-bg.jpg)",backgroundSize:"cover",backgroundPosition:"center",opacity:0.18}}/>
       <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(15,41,82,0.85) 0%,rgba(15,41,82,0.95) 100%)"}}/>
 
       <div style={{position:"relative",zIndex:1,width:"100%",maxWidth:560}}>
         {/* Header */}
         <div style={{textAlign:"center",marginBottom:20}}>
-          <img src="/nic-logo.png" alt="NIC" style={{height:72,objectFit:"contain",filter:"brightness(10)"}}/>
+          <div style={{display:"inline-block",background:"#fff",borderRadius:12,padding:"8px 16px"}}><img src="/nic-logo.png" alt="NIC" style={{height:54,objectFit:"contain"}}/></div>
           <h2 style={{fontSize:20,fontWeight:700,color:"#fff",margin:"12px 0 4px"}}>Recruitment Portal</h2>
           <p style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>Select your profile to continue</p>
         </div>
@@ -877,7 +877,7 @@ export default function App(){
   if(!user)return<LoginScreen members={members} onLogin={setUser}/>;
   if(appLoading)return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:"system-ui,sans-serif"}}>
-      <img src="/nic-logo.png" alt="NIC" style={{height:70,objectFit:"contain"}}/><Spinner size={28}/>
+      <div style={{display:"inline-block",background:"#fff",borderRadius:12,padding:"8px 16px"}}><img src="/nic-logo.png" alt="NIC" style={{height:52,objectFit:"contain"}}/></div><Spinner size={28}/>
       <div style={{color:C.textMid,fontSize:14}}>Loading portal…</div>
     </div>
   );
@@ -918,7 +918,7 @@ export default function App(){
       {/* ── SIDEBAR ── */}
       <aside className={`sidebar${sidebarOpen?" open":""}`} style={{width:236,background:C.navy,display:"flex",flexDirection:"column",flexShrink:0,position:"sticky",top:0,height:"100vh",overflowY:"auto"}}>
         <div style={{background:C.navyMid,padding:"18px 16px 14px",textAlign:"center"}}>
-          <img src="/nic-logo.png" alt="NIC" style={{height:62,objectFit:"contain",filter:"brightness(10)"}}/>
+          <div style={{display:"inline-block",background:"#fff",borderRadius:10,padding:"6px 14px"}}><img src="/nic-logo.png" alt="NIC" style={{height:44,objectFit:"contain"}}/></div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:9,background:"rgba(255,255,255,0.07)",margin:"12px 12px 0",borderRadius:9,padding:"9px 11px"}}>
           <div style={{width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#fff",flexShrink:0}}>{initials(user.name)}</div>
