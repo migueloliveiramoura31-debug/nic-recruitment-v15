@@ -644,6 +644,11 @@ export default function App(){
   const [chosenSet,     setChosenSet]     = useState({}); // {candidateId: true}
   const [sidebarOpen,   setSidebarOpen]   = useState(false);
   const [deadline,      setDeadline]      = useState("");
+  const [evalGroups,    setEvalGroups]    = useState([]);     // [{id,name}]
+  const [groupMembers,  setGroupMembers]  = useState([]);     // [{group_id,member_id}]
+  const [groupCandidates,setGroupCandidates]=useState([]);    // [{group_id,candidate_id}]
+  const [showAllMode,   setShowAllMode]   = useState(false);
+  const [showGroupMgmt, setShowGroupMgmt] = useState(false);
 
   const showToast=(msg,type="ok")=>{setToast({msg,type});setTimeout(()=>setToast(null),3000);};
 
@@ -663,7 +668,10 @@ export default function App(){
       sb.from("interview_assignments").select("*"),
       sb.from("candidate_promotions").select("*"),
       sb.from("chosen_candidates").select("*"),
-    ]).then(([c,sc,ai,cfg,ivf,iva,promo,chosen])=>{
+      sb.from("eval_groups").select("*"),
+      sb.from("eval_group_members").select("*"),
+      sb.from("eval_group_candidates").select("*"),
+    ]).then(([c,sc,ai,cfg,ivf,iva,promo,chosen,eg,egm,egc])=>{
       setCandidates(c.data?.length?c.data:null);
       if(sc.data)setAllScores(sc.data);
       if(ai.data){const m={};ai.data.forEach(r=>{m[r.candidate_id]=r;});setAiScores(m);}
@@ -679,6 +687,11 @@ export default function App(){
       if(iva.data)setAssignments(iva.data);
       if(promo.data){const m={};promo.data.forEach(r=>{m[r.candidate_id]=r.round;});setPromoted(m);}
       if(chosen.data){const m={};chosen.data.forEach(r=>{m[r.candidate_id]=true;});setChosenSet(m);}
+      if(eg.data)setEvalGroups(eg.data);
+      if(egm.data)setGroupMembers(egm.data);
+      if(egc.data)setGroupCandidates(egc.data);
+      const saMode=cfg.data?.find(r=>r.key==="show_all_candidates");
+      if(saMode)setShowAllMode(saMode.value==="true");
       setAppLoading(false);
     });
   },[user]);
@@ -698,6 +711,7 @@ export default function App(){
         if(p.new?.key==="revealed")setRevealed(p.new.value==="true");
         if(p.new?.key==="top_n")setTopN(parseInt(p.new.value)||20);
         if(p.new?.key==="deadline")setDeadline(p.new.value||"");
+        if(p.new?.key==="show_all_candidates")setShowAllMode(p.new.value==="true");
       })
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"candidates"},p=>{
         setCandidates(prev=>prev?[...prev,p.new]:[p.new]);
@@ -736,6 +750,7 @@ export default function App(){
   const handleImport=useCallback(async rows=>{
     setImporting(true);
     await Promise.all([
+      sb.from("eval_group_candidates").delete().neq("group_id","_"),
       sb.from("chosen_candidates").delete().neq("candidate_id","_"),
       sb.from("interview_feedback").delete().neq("candidate_id","_"),
       sb.from("interview_assignments").delete().neq("candidate_id","_"),
@@ -745,7 +760,7 @@ export default function App(){
       sb.from("candidates").delete().neq("id","_"),
     ]);
     await sb.from("settings").upsert({key:"revealed",value:"false"},{onConflict:"key"});
-    setAllScores([]); setAiScores({}); setInterviewData([]); setAssignments([]); setPromoted({}); setChosenSet({}); setRevealed(false);
+    setAllScores([]); setAiScores({}); setInterviewData([]); setAssignments([]); setPromoted({}); setChosenSet({}); setGroupCandidates([]); setRevealed(false);
     const mapped=rows.map((r,i)=>({
       id:`c_${Date.now()}_${i}`,
       full_name:extractName(r)||getCol(r,"student")||`Candidate ${i+1}`,
@@ -837,6 +852,62 @@ export default function App(){
     showToast(date?"Deadline set for all members":"Deadline removed","ok");
   },[]);
 
+  // ── Group management ────────────────────────────────────────────────────
+  const handleCreateGroup=useCallback(async(name)=>{
+    const id=`g_${Date.now()}`;
+    const {error}=await sb.from("eval_groups").insert({id,name});
+    if(error){showToast("Failed to create group","err");return;}
+    setEvalGroups(prev=>[...prev,{id,name}]);
+    showToast(`Group "${name}" created`,"ok");
+  },[]);
+
+  const handleDeleteGroup=useCallback(async(groupId)=>{
+    await sb.from("eval_group_candidates").delete().eq("group_id",groupId);
+    await sb.from("eval_group_members").delete().eq("group_id",groupId);
+    await sb.from("eval_groups").delete().eq("id",groupId);
+    setEvalGroups(prev=>prev.filter(g=>g.id!==groupId));
+    setGroupMembers(prev=>prev.filter(m=>m.group_id!==groupId));
+    setGroupCandidates(prev=>prev.filter(c=>c.group_id!==groupId));
+    showToast("Group deleted","ok");
+  },[]);
+
+  const handleAssignMemberToGroup=useCallback(async(groupId,memberId,add)=>{
+    if(add){
+      // Remove from other groups first
+      await sb.from("eval_group_members").delete().eq("member_id",memberId);
+      await sb.from("eval_group_members").insert({group_id:groupId,member_id:memberId});
+      setGroupMembers(prev=>[...prev.filter(m=>m.member_id!==memberId),{group_id:groupId,member_id:memberId}]);
+    } else {
+      await sb.from("eval_group_members").delete().eq("group_id",groupId).eq("member_id",memberId);
+      setGroupMembers(prev=>prev.filter(m=>!(m.group_id===groupId&&m.member_id===memberId)));
+    }
+  },[]);
+
+  const handleDistributeCandidates=useCallback(async()=>{
+    if(!evalGroups.length||!candidates?.length)return;
+    // Delete existing distribution
+    await sb.from("eval_group_candidates").delete().neq("group_id","_");
+    // Shuffle candidates
+    const shuffled=[...candidates].sort(()=>Math.random()-0.5);
+    const perGroup=Math.ceil(shuffled.length/evalGroups.length);
+    const rows=[];
+    shuffled.forEach((c,i)=>{
+      const groupIdx=Math.floor(i/perGroup);
+      const group=evalGroups[groupIdx]||evalGroups[evalGroups.length-1];
+      rows.push({group_id:group.id,candidate_id:c.id});
+    });
+    await sb.from("eval_group_candidates").insert(rows);
+    setGroupCandidates(rows);
+    showToast(`${candidates.length} candidates distributed across ${evalGroups.length} groups`,"ok");
+  },[evalGroups,candidates]);
+
+  const handleToggleShowAll=useCallback(async()=>{
+    const newVal=!showAllMode;
+    setShowAllMode(newVal);
+    await sb.from("settings").upsert({key:"show_all_candidates",value:newVal?"true":"false"},{onConflict:"key"});
+    showToast(newVal?"All candidates visible to everyone":"Group-based view active","ok");
+  },[showAllMode]);
+
   const handleToggleChosen=useCallback(async(candidateId)=>{
     if(chosenSet[candidateId]){
       await sb.from("chosen_candidates").delete().eq("candidate_id",candidateId);
@@ -852,9 +923,29 @@ export default function App(){
   // ── Derived ──────────────────────────────────────────────────────────────
   const isPresident=user?.role==="president";
   const myScores=useMemo(()=>allScores.filter(s=>s.member_id===user?.id),[allScores,user]);
-  const progress=useMemo(()=>user?memberProgress(user.id,candidates,allScores):{done:0,total:0},[user,candidates,allScores]);
+  const progress=useMemo(()=>user?memberProgress(user.id,myCandidates,allScores):{done:0,total:0},[user,myCandidates,allScores]);
   const allDone=useMemo(()=>members.length>0&&(candidates?.length||0)>0&&members.every(m=>{const p=memberProgress(m.id,candidates,allScores);return p.done===p.total&&p.total>0;}),[members,candidates,allScores]);
-  const filtered=useMemo(()=>(candidates||[]).filter(c=>!search||c.student_number?.includes(search)||c.email?.toLowerCase().includes(search.toLowerCase())||c.full_name?.toLowerCase().includes(search.toLowerCase())),[candidates,search]);
+  // My group's candidates (or all if showAll/president/no groups set up)
+  const myGroupId=useMemo(()=>{
+    const gm=groupMembers.find(m=>m.member_id===user?.id);
+    return gm?.group_id||null;
+  },[groupMembers,user]);
+  const myCandidates=useMemo(()=>{
+    if(!candidates)return [];
+    // Presidents always see all
+    if(isPresident)return candidates;
+    // Show all mode
+    if(showAllMode)return candidates;
+    // No groups set up — show all
+    if(!evalGroups.length||!groupCandidates.length)return candidates;
+    // Not in any group — show nothing
+    if(!myGroupId)return [];
+    // Show only my group's candidates
+    const myIds=new Set(groupCandidates.filter(gc=>gc.group_id===myGroupId).map(gc=>gc.candidate_id));
+    return candidates.filter(c=>myIds.has(c.id));
+  },[candidates,isPresident,showAllMode,evalGroups,groupCandidates,myGroupId]);
+
+  const filtered=useMemo(()=>myCandidates.filter(c=>!search||c.student_number?.includes(search)||c.email?.toLowerCase().includes(search.toLowerCase())||c.full_name?.toLowerCase().includes(search.toLowerCase())),[myCandidates,search]);
   const ranked=useMemo(()=>(candidates||[]).map(c=>({...c,avg:avgScore(c.id,allScores)})).sort((a,b)=>(parseFloat(b.avg)||0)-(parseFloat(a.avg)||0)),[candidates,allScores]);
   const candidateAI=selected?(aiScores[selected.id]||{}):{};
   const interviewCandidates=useMemo(()=>(candidates||[]).filter(c=>promoted[c.id]==="interview"||promoted[c.id]==="president"),[candidates,promoted]);
@@ -871,6 +962,7 @@ export default function App(){
     {id:"presidents", label:"👔 Final Round"},
     {id:"chosen",     label:"⭐ Chosen"},
     {id:"stats",      label:"📊 Stats"},
+    ...(isPresident?[{id:"groups",label:"👥 Groups"}]:[]),
   ];
 
   if(!authed)return<PasswordGate onPass={()=>setAuthed(true)}/>;
@@ -1016,10 +1108,20 @@ export default function App(){
         {/* ══ APPLICATIONS ══ */}
         {candidates&&view==="list"&&!selected&&(
           <div style={{animation:"fadeUp 0.2s ease"}}>
+            {/* Group info banner */}
+            {!isPresident&&myGroupId&&!showAllMode&&(()=>{
+              const myGroup=evalGroups.find(g=>g.id===myGroupId);
+              return myGroup?(
+                <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:9,padding:"10px 16px",marginBottom:14,fontSize:13,color:C.navy,fontWeight:600}}>
+                  👥 You are in <strong>{myGroup.name}</strong> — showing {myCandidates.length} of {candidates.length} candidates
+                </div>
+              ):null;
+            })()}
+
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:20,gap:12,flexWrap:"wrap"}}>
               <div>
                 <h1 style={{fontSize:24,fontWeight:800,color:C.navy,margin:0}}>Applications</h1>
-                <p style={{color:C.textMid,fontSize:13,marginTop:3}}>{candidates.length} candidates · {progress.done} evaluated by you</p>
+                <p style={{color:C.textMid,fontSize:13,marginTop:3}}>{myCandidates.length} candidates · {progress.done} evaluated by you{myCandidates.length<(candidates||[]).length?` (filtered by group)`:""}</p>
               </div>
               <input type="text" placeholder="Search name, student no. or email…" value={search} onChange={e=>setSearch(e.target.value)}
                 style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 13px",fontSize:13,color:C.text,width:260,outline:"none",flexShrink:0}}/>
@@ -1380,6 +1482,119 @@ export default function App(){
             )}
           </div>
         )}
+        {/* ══ GROUPS ══ */}
+        {candidates&&view==="groups"&&isPresident&&(
+          <div style={{animation:"fadeUp 0.2s ease"}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:20,gap:12,flexWrap:"wrap"}}>
+              <div>
+                <h1 style={{fontSize:24,fontWeight:800,color:C.navy,margin:0}}>👥 Evaluation Groups</h1>
+                <p style={{color:C.textMid,fontSize:13,marginTop:3}}>
+                  {evalGroups.length} groups · {candidates.length} candidates
+                  {groupCandidates.length>0?` · ${groupCandidates.length} distributed`:" · not distributed yet"}
+                </p>
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button onClick={handleToggleShowAll}
+                  style={{background:showAllMode?"#dcfce7":"#fee2e2",color:showAllMode?C.green:C.red,border:`1px solid ${showAllMode?"#86efac":"#fca5a5"}`,borderRadius:8,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                  {showAllMode?"👁️ Show All: ON":"👁️ Show All: OFF"}
+                </button>
+              </div>
+            </div>
+
+            {/* Create group */}
+            <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:16}}>
+              <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                <div style={{fontSize:11,color:C.textLt,letterSpacing:2,fontWeight:700}}>CREATE GROUP</div>
+                <input id="newGroupName" type="text" placeholder="Group name (e.g. Group A)" 
+                  style={{flex:"1 1 200px",border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:C.text,outline:"none"}}
+                  onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){handleCreateGroup(e.target.value.trim());e.target.value="";}}}
+                />
+                <button onClick={()=>{const inp=document.getElementById("newGroupName");if(inp?.value.trim()){handleCreateGroup(inp.value.trim());inp.value="";}}}
+                  style={{background:C.navy,color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                  + Create
+                </button>
+              </div>
+            </div>
+
+            {/* Groups list */}
+            {evalGroups.length===0?(
+              <div style={{textAlign:"center",padding:"50px 20px",background:"#fff",borderRadius:12,border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:36,marginBottom:10}}>👥</div>
+                <h3 style={{color:C.navyMid,margin:"0 0 8px",fontSize:16}}>No groups created</h3>
+                <p style={{color:C.textMid,fontSize:13}}>Create groups above, assign members, then distribute candidates.</p>
+              </div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                {evalGroups.map(group=>{
+                  const gMembers=groupMembers.filter(m=>m.group_id===group.id);
+                  const gCandidates=groupCandidates.filter(c=>c.group_id===group.id);
+                  const memberNames=gMembers.map(gm=>members.find(m=>m.id===gm.member_id)).filter(Boolean);
+                  const unassigned=members.filter(m=>!groupMembers.some(gm=>gm.member_id===m.id));
+
+                  return(
+                    <div key={group.id} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+                      {/* Group header */}
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 18px",background:C.bg,borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:8}}>
+                        <div>
+                          <div style={{fontWeight:700,fontSize:16,color:C.navy}}>{group.name}</div>
+                          <div style={{fontSize:12,color:C.textLt,marginTop:2}}>{memberNames.length} members · {gCandidates.length} candidates</div>
+                        </div>
+                        <button onClick={()=>handleDeleteGroup(group.id)}
+                          style={{background:"#fee2e2",color:C.red,border:"1px solid #fca5a5",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                          🗑️ Delete
+                        </button>
+                      </div>
+
+                      {/* Members */}
+                      <div style={{padding:18}}>
+                        <div style={{fontSize:10,color:C.textLt,letterSpacing:2,fontWeight:700,marginBottom:10}}>MEMBERS IN THIS GROUP</div>
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                          {memberNames.map(m=>(
+                            <div key={m.id} style={{display:"flex",alignItems:"center",gap:6,background:C.navy,color:"#fff",borderRadius:20,padding:"5px 12px 5px 6px",fontSize:12,fontWeight:600}}>
+                              <span style={{width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800}}>{initials(m.name)}</span>
+                              {m.name.split(" ")[0]}
+                              <button onClick={()=>handleAssignMemberToGroup(group.id,m.id,false)}
+                                style={{background:"none",border:"none",color:"rgba(255,255,255,0.5)",fontSize:14,cursor:"pointer",padding:"0 2px",marginLeft:2}}>✕</button>
+                            </div>
+                          ))}
+                          {memberNames.length===0&&<span style={{color:C.textLt,fontSize:12,fontStyle:"italic"}}>No members assigned yet</span>}
+                        </div>
+
+                        {/* Add member dropdown */}
+                        {unassigned.length>0&&(
+                          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                            <span style={{fontSize:10,color:C.textLt,fontWeight:700,letterSpacing:1,alignSelf:"center"}}>ADD:</span>
+                            {unassigned.map(m=>(
+                              <button key={m.id} onClick={()=>handleAssignMemberToGroup(group.id,m.id,true)}
+                                style={{background:C.bg,color:C.textMid,border:`1px solid ${C.border}`,borderRadius:20,padding:"4px 10px 4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+                                <span style={{fontSize:12}}>+</span> {m.name.split(" ")[0]}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Distribute button */}
+                <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:20,textAlign:"center"}}>
+                  <p style={{color:C.textMid,fontSize:13,marginBottom:12}}>
+                    {groupCandidates.length>0
+                      ?`Currently ${groupCandidates.length} candidates distributed. Redistribute will reshuffle.`
+                      :`Distribute ${candidates.length} candidates equally across ${evalGroups.length} groups.`
+                    }
+                  </p>
+                  <button onClick={handleDistributeCandidates}
+                    style={{background:C.navy,color:"#fff",border:"none",borderRadius:9,padding:"11px 28px",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                    🔀 {groupCandidates.length>0?"Redistribute":"Distribute"} Candidates
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ══ STATS ══ */}
         {candidates&&view==="stats"&&(
           <div style={{animation:"fadeUp 0.2s ease"}}>
