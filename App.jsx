@@ -925,28 +925,24 @@ export default function App(){
   // ── Derived ──────────────────────────────────────────────────────────────
   const isPresident=user?.role==="president";
   const myScores=useMemo(()=>allScores.filter(s=>s.member_id===user?.id),[allScores,user]);
-  const progress=useMemo(()=>user?memberProgress(user.id,myCandidates,allScores):{done:0,total:0},[user,myCandidates,allScores]);
-  const allDone=useMemo(()=>members.length>0&&(candidates?.length||0)>0&&members.every(m=>{const p=memberProgress(m.id,candidates,allScores);return p.done===p.total&&p.total>0;}),[members,candidates,allScores]);
-  // My group's candidates (or all if showAll/president/no groups set up)
+
+  // Group filtering — must be defined before progress
   const myGroupId=useMemo(()=>{
     const gm=groupMembers.find(m=>m.member_id===user?.id);
     return gm?.group_id||null;
   },[groupMembers,user]);
   const myCandidates=useMemo(()=>{
     if(!candidates)return [];
-    // Presidents always see all
     if(isPresident)return candidates;
-    // Show all mode
     if(showAllMode)return candidates;
-    // No groups set up — show all
     if(!evalGroups.length||!groupCandidates.length)return candidates;
-    // Not in any group — show nothing
     if(!myGroupId)return [];
-    // Show only my group's candidates
     const myIds=new Set(groupCandidates.filter(gc=>gc.group_id===myGroupId).map(gc=>gc.candidate_id));
     return candidates.filter(c=>myIds.has(c.id));
   },[candidates,isPresident,showAllMode,evalGroups,groupCandidates,myGroupId]);
 
+  const progress=useMemo(()=>user?memberProgress(user.id,myCandidates,allScores):{done:0,total:0},[user,myCandidates,allScores]);
+  const allDone=useMemo(()=>members.length>0&&(candidates?.length||0)>0&&members.every(m=>{const p=memberProgress(m.id,candidates,allScores);return p.done===p.total&&p.total>0;}),[members,candidates,allScores]);
   const filtered=useMemo(()=>myCandidates.filter(c=>!search||c.student_number?.includes(search)||c.email?.toLowerCase().includes(search.toLowerCase())||c.full_name?.toLowerCase().includes(search.toLowerCase())),[myCandidates,search]);
   const ranked=useMemo(()=>(candidates||[]).map(c=>({...c,avg:avgScore(c.id,allScores)})).sort((a,b)=>(parseFloat(b.avg)||0)-(parseFloat(a.avg)||0)),[candidates,allScores]);
   const candidateAI=selected?(aiScores[selected.id]||{}):{};
