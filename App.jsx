@@ -659,41 +659,43 @@ export default function App(){
   useEffect(()=>{
     if(!user)return;
     setAppLoading(true);
+    // Safe loader — if a table doesn't exist, returns empty array instead of crashing
+    const safe=async(query)=>{try{const r=await query;return r.data||[];}catch{return[];}};
     Promise.all([
-      sb.from("candidates").select("*").order("student_number"),
-      sb.from("scores").select("*"),
-      sb.from("ai_scores").select("*"),
-      sb.from("settings").select("*"),
-      sb.from("interview_feedback").select("*"),
-      sb.from("interview_assignments").select("*"),
-      sb.from("candidate_promotions").select("*"),
-      sb.from("chosen_candidates").select("*"),
-      sb.from("eval_groups").select("*"),
-      sb.from("eval_group_members").select("*"),
-      sb.from("eval_group_candidates").select("*"),
+      safe(sb.from("candidates").select("*").order("student_number")),
+      safe(sb.from("scores").select("*")),
+      safe(sb.from("ai_scores").select("*")),
+      safe(sb.from("settings").select("*")),
+      safe(sb.from("interview_feedback").select("*")),
+      safe(sb.from("interview_assignments").select("*")),
+      safe(sb.from("candidate_promotions").select("*")),
+      safe(sb.from("chosen_candidates").select("*")),
+      safe(sb.from("eval_groups").select("*")),
+      safe(sb.from("eval_group_members").select("*")),
+      safe(sb.from("eval_group_candidates").select("*")),
     ]).then(([c,sc,ai,cfg,ivf,iva,promo,chosen,eg,egm,egc])=>{
-      setCandidates(c.data?.length?c.data:null);
-      if(sc.data)setAllScores(sc.data);
-      if(ai.data){const m={};ai.data.forEach(r=>{m[r.candidate_id]=r;});setAiScores(m);}
-      if(cfg.data){
-        const rev=cfg.data.find(r=>r.key==="revealed");
-        const tn=cfg.data.find(r=>r.key==="top_n");
-        const dl=cfg.data.find(r=>r.key==="deadline");
+      setCandidates(c.length?c:null);
+      if(sc.length)setAllScores(sc);
+      if(ai.length){const m={};ai.forEach(r=>{m[r.candidate_id]=r;});setAiScores(m);}
+      if(cfg.length){
+        const rev=cfg.find(r=>r.key==="revealed");
+        const tn=cfg.find(r=>r.key==="top_n");
+        const dl=cfg.find(r=>r.key==="deadline");
         if(rev)setRevealed(rev.value==="true");
         if(tn)setTopN(parseInt(tn.value)||20);
         if(dl)setDeadline(dl.value||"");
+        const saMode=cfg.find(r=>r.key==="show_all_candidates");
+        if(saMode)setShowAllMode(saMode.value==="true");
       }
-      if(ivf.data)setInterviewData(ivf.data);
-      if(iva.data)setAssignments(iva.data);
-      if(promo.data){const m={};promo.data.forEach(r=>{m[r.candidate_id]=r.round;});setPromoted(m);}
-      if(chosen.data){const m={};chosen.data.forEach(r=>{m[r.candidate_id]=true;});setChosenSet(m);}
-      if(eg.data)setEvalGroups(eg.data);
-      if(egm.data)setGroupMembers(egm.data);
-      if(egc.data)setGroupCandidates(egc.data);
-      const saMode=cfg.data?.find(r=>r.key==="show_all_candidates");
-      if(saMode)setShowAllMode(saMode.value==="true");
+      if(ivf.length)setInterviewData(ivf);
+      if(iva.length)setAssignments(iva);
+      if(promo.length){const m={};promo.forEach(r=>{m[r.candidate_id]=r.round;});setPromoted(m);}
+      if(chosen.length){const m={};chosen.forEach(r=>{m[r.candidate_id]=true;});setChosenSet(m);}
+      if(eg.length)setEvalGroups(eg);
+      if(egm.length)setGroupMembers(egm);
+      if(egc.length)setGroupCandidates(egc);
       setAppLoading(false);
-    });
+    }).catch(()=>setAppLoading(false));
   },[user]);
 
   // ── Realtime ─────────────────────────────────────────────────────────────
