@@ -151,10 +151,12 @@ const COL_VARIANTS = {
   phone:     ["Phone number","What is your phone number?","Telefone","Phone"],
   cv:        ["Upload CV","Please upload your CV.","CV","Curriculum"],
   b1:        ["Tell us about yourself. What motivates you? How are you different from other applicants? Where do you see yourself in five years? (Max 750 characters)"],
-  b2:        ["What makes you want to join NIC-UD? Why do you think you could be a valuable member for the club? How are you different from other applicants? (Max 750 characters)"],
+  b2:        ["What makes you want to join NIC-UD? Why do you think you could be a valuable member for the club? How are you different from other applicants? (Max 750 characters)",
+              "What makes you want to join NIC-UD? Why do you think you could be a valuable member for the club? (Max 750 characters)"],
   b3:        ["What's one thing you pursued during your Bachelor's that wasn't required, and what motivated you to do it? (Max 750 characters)",
               "What\u2019s one thing you pursued during your Bachelor\u2019s that wasn\u2019t required, and what motivated you to do it? (Max 750 characters)"],
-  t1:        ["Choose a stock from the NIC-UD fund and explain to us why it might be a bad investment. (Max 500 characters)",
+  t1:        ["Choose a stock from the NIC-UD fund that you would follow more closely due to its potential long-term risks. Explain your choice and foreseen risks. (Max 1000 characters)",
+              "Choose a stock from the NIC-UD fund and explain to us why it might be a bad investment. (Max 500 characters)",
               "If you had \u20AC100,000 to invest, how would you allocate this capital across different asset classes or markets to build a solid, future-proof portfolio? Please explain your choices by considering current macroeconomic trends and some key fundamentals. (Max 1000 characters)"],
   comments:  ["Additional Comments/Questions","Additional Comments","Comments"],
   timestamp: ["Coluna 1","Start time","Completion time","Timestamp","ID"],
@@ -182,7 +184,7 @@ const QUESTIONS = [
   { id:"b1", label:"About Yourself",    sublabel:"Motivation & Differentiation"          },
   { id:"b2", label:"Why NIC-UD?",       sublabel:"Fit & Value Add"                       },
   { id:"b3", label:"Beyond Required",   sublabel:"Initiative & Self-Motivation"          },
-  { id:"t1", label:"Technical",         sublabel:"Stock Analysis — Bad Investment Thesis" },
+  { id:"t1", label:"Technical",         sublabel:"Stock Risk Analysis" },
 ];
 const VERDICTS = [
   { id:"pass",       label:"Pass",       color:"#16a34a", bg:"#dcfce7" },
@@ -1155,12 +1157,45 @@ export default function App(){
         {candidates&&view==="evaluate"&&selected&&(
           <div style={{animation:"fadeUp 0.2s ease"}}>
             <button onClick={()=>{setSelected(null);setView("list");}} style={{background:"none",border:"none",color:C.textMid,cursor:"pointer",fontSize:13,marginBottom:14,padding:0}}>← Back</button>
-            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:18,gap:12,flexWrap:"wrap"}}>
-              <div>
-                <h1 style={{fontSize:22,fontWeight:800,color:C.navy,margin:0}}>{displayName(selected)}</h1>
-                <p style={{color:C.textMid,fontSize:13,marginTop:3}}>{selected.email}{selected.phone?` · ${selected.phone}`:""}</p>
+            {/* Candidate info card */}
+            <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:18,boxShadow:"0 2px 8px rgba(15,41,82,0.06)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+                {/* Avatar */}
+                <div style={{width:56,height:56,borderRadius:"50%",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:900,color:"#fff",flexShrink:0}}>
+                  {initials(displayName(selected))}
+                </div>
+                {/* Info */}
+                <div style={{flex:1,minWidth:0}}>
+                  <h1 style={{fontSize:22,fontWeight:800,color:C.navy,margin:0}}>{displayName(selected)}</h1>
+                  <div style={{display:"flex",gap:16,marginTop:8,flexWrap:"wrap"}}>
+                    {selected.student_number&&(
+                      <div style={{display:"flex",alignItems:"center",gap:5}}>
+                        <span style={{fontSize:11,color:C.textLt,fontWeight:700,letterSpacing:1}}>ID</span>
+                        <span style={{fontSize:14,color:C.text,fontWeight:600}}>#{selected.student_number}</span>
+                      </div>
+                    )}
+                    {selected.email&&(
+                      <div style={{display:"flex",alignItems:"center",gap:5}}>
+                        <span style={{fontSize:11,color:C.textLt,fontWeight:700}}>📧</span>
+                        <span style={{fontSize:14,color:C.text,fontWeight:600}}>{selected.email}</span>
+                      </div>
+                    )}
+                    {selected.phone&&(
+                      <div style={{display:"flex",alignItems:"center",gap:5}}>
+                        <span style={{fontSize:11,color:C.textLt,fontWeight:700}}>📱</span>
+                        <span style={{fontSize:14,color:C.navy,fontWeight:700}}>{selected.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* CV button */}
+                {selected.cv_link&&(
+                  <a href={selected.cv_link} target="_blank" rel="noopener noreferrer"
+                    style={{background:C.navy,color:"#fff",borderRadius:9,padding:"10px 18px",fontSize:13,fontWeight:700,textDecoration:"none",whiteSpace:"nowrap",flexShrink:0}}>
+                    📄 Open CV →
+                  </a>
+                )}
               </div>
-              {selected.cv_link&&<a href={selected.cv_link} target="_blank" rel="noopener noreferrer" style={{background:C.navy,color:"#fff",borderRadius:8,padding:"9px 16px",fontSize:13,fontWeight:700,textDecoration:"none",whiteSpace:"nowrap"}}>📄 CV →</a>}
             </div>
             {/* AI panel */}
             <div style={{background:"#f8fafc",border:`1px solid ${C.border}`,borderRadius:11,padding:18,marginBottom:14}}>
