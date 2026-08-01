@@ -181,10 +181,14 @@ function displayName(c) { return c?.full_name && c.full_name !== c.student_numbe
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const QUESTIONS = [
-  { id:"b1", label:"About Yourself",    sublabel:"Motivation & Differentiation"          },
-  { id:"b2", label:"Why NIC-UD?",       sublabel:"Fit & Value Add"                       },
-  { id:"b3", label:"Beyond Required",   sublabel:"Initiative & Self-Motivation"          },
-  { id:"t1", label:"Technical",         sublabel:"Stock Risk Analysis" },
+  { id:"b1", label:"About Yourself",    sublabel:"Motivation & Differentiation",
+    fullText:"Tell us about yourself. What motivates you? How are you different from other applicants? Where do you see yourself in five years? (Max 750 characters)" },
+  { id:"b2", label:"Why NIC-UD?",       sublabel:"Fit & Value Add",
+    fullText:"What makes you want to join NIC-UD? Why do you think you could be a valuable member for the club? (Max 750 characters)" },
+  { id:"b3", label:"Beyond Required",   sublabel:"Initiative & Self-Motivation",
+    fullText:"What\u2019s one thing you pursued during your Bachelor\u2019s that wasn\u2019t required, and what motivated you to do it? (Max 750 characters)" },
+  { id:"t1", label:"Technical",         sublabel:"Stock Risk Analysis",
+    fullText:"Choose a stock from the NIC-UD fund that you would follow more closely due to its potential long-term risks. Explain your choice and foreseen risks. (Max 1000 characters)" },
 ];
 const VERDICTS = [
   { id:"pass",       label:"Pass",       color:"#16a34a", bg:"#dcfce7" },
@@ -308,7 +312,8 @@ function AnswersModal({candidate,aiScores,onClose}){
         <div style={{overflowY:"auto",padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
           {QUESTIONS.map(q=>(
             <div key={q.id} style={{background:C.bg,borderRadius:10,padding:16,borderLeft:`3px solid ${C.border}`}}>
-              <div style={{fontSize:10,color:C.navy,letterSpacing:2,fontWeight:700,marginBottom:8}}>{q.label.toUpperCase()} — {q.sublabel}</div>
+              <div style={{fontSize:10,color:C.navy,letterSpacing:2,fontWeight:700,marginBottom:4}}>{q.label.toUpperCase()}</div>
+              <div style={{fontSize:11,color:C.textLt,lineHeight:1.5,marginBottom:8,fontStyle:"italic"}}>"{q.fullText}"</div>
               <div style={{fontSize:14,color:C.text,lineHeight:1.85,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
                 {c[q.id]?.trim()||<em style={{color:C.textLt}}>No answer provided</em>}
               </div>
@@ -1227,10 +1232,11 @@ export default function App(){
               const cur=existing?.score;
               return(
                 <div key={q.id} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:11,padding:20,marginBottom:10,boxShadow:"0 1px 3px rgba(0,0,0,0.03)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,flexWrap:"wrap",gap:8}}>
-                    <div><div style={{fontSize:10,color:C.navy,letterSpacing:2,fontWeight:700}}>{q.label.toUpperCase()}</div><div style={{fontSize:11,color:C.textLt,marginTop:2}}>{q.sublabel}</div></div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6,flexWrap:"wrap",gap:8}}>
+                    <div><div style={{fontSize:10,color:C.navy,letterSpacing:2,fontWeight:700}}>{q.label.toUpperCase()}</div></div>
                     {cur!=null&&<span style={{background:C.navy,color:"#fff",borderRadius:20,padding:"3px 12px",fontSize:12,fontWeight:700}}>{fmtScore(cur)}/4</span>}
                   </div>
+                  <div style={{fontSize:12,color:C.textLt,lineHeight:1.5,marginBottom:14,fontStyle:"italic"}}>"{q.fullText}"</div>
                   <div style={{fontSize:14,color:C.text,lineHeight:1.85,marginBottom:16,padding:"13px 15px",background:C.bg,borderRadius:8,borderLeft:`3px solid ${C.border}`,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
                     {selected[q.id]?.trim()||<em style={{color:C.textLt}}>No answer provided</em>}
                   </div>
