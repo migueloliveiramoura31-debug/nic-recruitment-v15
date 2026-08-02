@@ -476,35 +476,116 @@ function FeedbackView({candidate,interviewData,members,round,onViewAnswers}){
 }
 
 // ── Import panel ──────────────────────────────────────────────────────────────
-function ImportPanel({onImport,loading,hasCandidates}){
+function ImportPanel({onImportReplace,onImportAppend,loading,hasCandidates}){
   const [drag,setDrag]=useState(false);
   const [err,setErr]=useState(null);
-  const parse=f=>{
+  const [parsedRows,setParsedRows]=useState(null);
+  const [mode,setMode]=useState(null); // null | "replace" | "append"
+  const [stats,setStats]=useState(null); // {total, new, duplicate}
+
+  const parse=(f,existingCandidates)=>{
     if(!f)return;
+    setErr(null);setParsedRows(null);setMode(null);setStats(null);
     Papa.parse(f,{header:true,skipEmptyLines:true,complete:r=>{
       if(!r.data?.length){setErr("CSV appears empty.");return;}
       const seen={};
       r.data.forEach(row=>{const sn=getCol(row,"student")?.trim();if(!sn||sn==="teste")return;if(!seen[sn]||getCol(row,"timestamp")>getCol(seen[sn],"timestamp"))seen[sn]=row;});
       const deduped=Object.values(seen);
       if(!deduped.length){setErr("No valid candidates found.");return;}
-      onImport(deduped);
+      // Calculate stats if we have existing candidates
+      if(hasCandidates&&existingCandidates){
+        const existingIds=new Set((existingCandidates||[]).map(c=>c.student_number));
+        const newOnly=deduped.filter(r=>!existingIds.has(getCol(r,"student")?.trim()));
+        const dupes=deduped.length-newOnly.length;
+        setStats({total:deduped.length,new:newOnly.length,duplicate:dupes});
+      }
+      setParsedRows(deduped);
     },error:()=>setErr("Failed to parse CSV.")});
   };
+
+  const handleConfirm=()=>{
+    if(!parsedRows)return;
+    if(mode==="replace")onImportReplace(parsedRows);
+    else if(mode==="append")onImportAppend(parsedRows);
+    setParsedRows(null);setMode(null);setStats(null);
+  };
+
   return(
     <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:22}}>
-      <div style={{fontSize:11,fontWeight:700,color:C.navy,letterSpacing:1,marginBottom:12}}>{hasCandidates?"📂 REPLACE APPLICATIONS":"📂 IMPORT APPLICATIONS"}</div>
-      {hasCandidates&&<div style={{background:"#fff8e6",border:"1px solid #fcd34d",borderRadius:8,padding:"9px 13px",fontSize:13,color:"#92400e",marginBottom:12}}>⚠️ Importing will replace all existing data and reset all rounds.</div>}
-      <div style={{border:`2px dashed ${drag?C.navy:C.border}`,borderRadius:9,padding:"24px 16px",cursor:"pointer",textAlign:"center",background:drag?"#eef3ff":C.bg,transition:"all 0.2s"}}
-        onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)}
-        onDrop={e=>{e.preventDefault();setDrag(false);parse(e.dataTransfer.files[0]);}}
-        onClick={()=>document.getElementById("csvImport").click()}>
-        <div style={{fontSize:32,marginBottom:6}}>📄</div>
-        <p style={{margin:"0 0 3px",fontWeight:700,color:C.text,fontSize:14}}>Drop CSV or click to upload</p>
-        <p style={{margin:0,fontSize:12,color:C.textLt}}>Duplicates auto-removed · all rounds reset</p>
-        <input id="csvImport" type="file" accept=".csv" style={{display:"none"}} onChange={e=>parse(e.target.files[0])}/>
-      </div>
+      <div style={{fontSize:11,fontWeight:700,color:C.navy,letterSpacing:1,marginBottom:12}}>📂 IMPORT APPLICATIONS</div>
+
+      {/* Dropzone */}
+      {!parsedRows&&(
+        <div style={{border:`2px dashed ${drag?C.navy:C.border}`,borderRadius:9,padding:"24px 16px",cursor:"pointer",textAlign:"center",background:drag?"#eef3ff":C.bg,transition:"all 0.2s"}}
+          onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)}
+          onDrop={e=>{e.preventDefault();setDrag(false);parse(e.dataTransfer.files[0]);}}
+          onClick={()=>document.getElementById("csvImport").click()}>
+          <div style={{fontSize:32,marginBottom:6}}>📄</div>
+          <p style={{margin:"0 0 3px",fontWeight:700,color:C.text,fontSize:14}}>Drop CSV or click to upload</p>
+          <p style={{margin:0,fontSize:12,color:C.textLt}}>Duplicates auto-removed by Student ID</p>
+          <input id="csvImport" type="file" accept=".csv" style={{display:"none"}} onChange={e=>parse(e.target.files[0])}/>
+        </div>
+      )}
+
+      {/* After parsing — show options */}
+      {parsedRows&&!mode&&(
+        <div>
+          <div style={{background:C.bg,borderRadius:9,padding:"14px 16px",marginBottom:14}}>
+            <div style={{fontSize:14,fontWeight:700,color:C.navy,marginBottom:6}}>📋 {parsedRows.length} candidates found in CSV</div>
+            {stats&&(
+              <div style={{fontSize:13,color:C.textMid}}>
+                <span style={{color:C.green,fontWeight:700}}>{stats.new} new</span>
+                {stats.duplicate>0&&<span> · <span style={{color:C.amber,fontWeight:600}}>{stats.duplicate} already exist</span></span>}
+              </div>
+            )}
+          </div>
+
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            {hasCandidates&&(
+              <button onClick={()=>setMode("append")}
+                style={{flex:1,padding:"14px 16px",background:"#f0fdf4",border:`2px solid #86efac`,borderRadius:10,cursor:"pointer",textAlign:"left"}}>
+                <div style={{fontSize:14,fontWeight:700,color:C.green,marginBottom:4}}>➕ Add New Only</div>
+                <div style={{fontSize:12,color:C.textMid}}>
+                  {stats?`Add ${stats.new} new candidates. Skip ${stats.duplicate} duplicates. Keep all existing scores and rounds.`:"Add only candidates that don't exist yet. Keep everything else."}
+                </div>
+              </button>
+            )}
+            <button onClick={()=>setMode("replace")}
+              style={{flex:1,padding:"14px 16px",background:"#fef2f2",border:`2px solid #fca5a5`,borderRadius:10,cursor:"pointer",textAlign:"left"}}>
+              <div style={{fontSize:14,fontWeight:700,color:C.red,marginBottom:4}}>🔄 Replace All</div>
+              <div style={{fontSize:12,color:C.textMid}}>Delete everything and start fresh with {parsedRows.length} candidates. Scores, interviews, groups — all reset.</div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation */}
+      {parsedRows&&mode&&(
+        <div style={{background:mode==="append"?"#f0fdf4":"#fef2f2",border:`1px solid ${mode==="append"?"#86efac":"#fca5a5"}`,borderRadius:9,padding:"14px 16px"}}>
+          <div style={{fontSize:14,fontWeight:700,color:mode==="append"?C.green:C.red,marginBottom:8}}>
+            {mode==="append"?`➕ Add ${stats?.new||parsedRows.length} new candidates?`:`🔄 Replace all with ${parsedRows.length} candidates?`}
+          </div>
+          {mode==="replace"&&<div style={{fontSize:12,color:C.red,marginBottom:10}}>⚠️ This will delete ALL existing candidates, scores, interviews, and groups.</div>}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{setMode(null);}} style={{flex:1,padding:"9px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:8,fontSize:13,fontWeight:600,cursor:"pointer",color:C.textMid}}>← Back</button>
+            <button onClick={handleConfirm} disabled={loading}
+              style={{flex:1,padding:"9px",background:mode==="append"?C.green:C.red,color:"#fff",border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+              {loading?"Importing…":"✓ Confirm"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {err&&<p style={{color:C.red,fontSize:13,marginTop:10}}>{err}</p>}
       {loading&&<div style={{display:"flex",justifyContent:"center",marginTop:12}}><Spinner/></div>}
+
+      {/* Reset to re-upload */}
+      {parsedRows&&!loading&&(
+        <button onClick={()=>{setParsedRows(null);setMode(null);setStats(null);setErr(null);}}
+          style={{background:"none",border:"none",color:C.textLt,fontSize:12,cursor:"pointer",marginTop:10,padding:0}}>
+          ← Upload different file
+        </button>
+      )}
     </div>
   );
 }
@@ -772,7 +853,33 @@ function AppInner(){
   },[user]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
-  const handleImport=useCallback(async rows=>{
+  // Map CSV rows to candidate objects
+  const mapRows=(rows)=>rows.map((r,i)=>({
+    id:`c_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`,
+    full_name:extractName(r)||getCol(r,"student")||`Candidate ${i+1}`,
+    student_number:getCol(r,"student")||"",
+    email:getCol(r,"email")||"",
+    phone:getCol(r,"phone")||"",
+    cv_link:getCol(r,"cv")||"",
+    b1:getCol(r,"b1")||"",
+    b2:getCol(r,"b2")||"",
+    b3:getCol(r,"b3")||"",
+    t1:getCol(r,"t1")||"",
+    comments:getCol(r,"comments")||"",
+    submitted_at:getCol(r,"timestamp")||"",
+  }));
+
+  const insertCandidates=async(mapped)=>{
+    let{error}=await sb.from("candidates").insert(mapped);
+    if(error?.message?.includes("column")){
+      const fallback=mapped.map(({email,phone,submitted_at,comments,b3,...rest})=>rest);
+      ({error}=await sb.from("candidates").insert(fallback));
+    }
+    return error;
+  };
+
+  // Replace all — wipe everything and start fresh
+  const handleImportReplace=useCallback(async rows=>{
     setImporting(true);
     await Promise.all([
       sb.from("eval_group_candidates").delete().neq("group_id","_"),
@@ -786,29 +893,57 @@ function AppInner(){
     ]);
     await sb.from("settings").upsert({key:"revealed",value:"false"},{onConflict:"key"});
     setAllScores([]); setAiScores({}); setInterviewData([]); setAssignments([]); setPromoted({}); setChosenSet({}); setGroupCandidates([]); setRevealed(false);
-    const mapped=rows.map((r,i)=>({
-      id:`c_${Date.now()}_${i}`,
-      full_name:extractName(r)||getCol(r,"student")||`Candidate ${i+1}`,
-      student_number:getCol(r,"student")||"",
-      email:getCol(r,"email")||"",
-      phone:getCol(r,"phone")||"",
-      cv_link:getCol(r,"cv")||"",
-      b1:getCol(r,"b1")||"",
-      b2:getCol(r,"b2")||"",
-      b3:getCol(r,"b3")||"",
-      t1:getCol(r,"t1")||"",
-      comments:getCol(r,"comments")||"",
-      submitted_at:getCol(r,"timestamp")||"",
-    }));
-    let{error}=await sb.from("candidates").insert(mapped);
-    if(error?.message?.includes("column")){
-      const fallback=mapped.map(({email,phone,submitted_at,comments,b3,...rest})=>rest);
-      ({error}=await sb.from("candidates").insert(fallback));
-    }
+    const mapped=mapRows(rows);
+    const error=await insertCandidates(mapped);
     if(error)showToast("Import failed: "+error.message,"err");
-    else{setCandidates(mapped);setShowImport(false);showToast(`${mapped.length} candidates imported`,"ok");}
+    else{setCandidates(mapped);setShowImport(false);showToast(`${mapped.length} candidates imported (fresh start)`,"ok");}
     setImporting(false);
   },[]);
+
+  // Append — add only new candidates (skip duplicates by student_number)
+  const handleImportAppend=useCallback(async rows=>{
+    setImporting(true);
+    const existingIds=new Set((candidates||[]).map(c=>c.student_number));
+    const newRows=rows.filter(r=>{
+      const sn=getCol(r,"student")?.trim();
+      return sn&&!existingIds.has(sn);
+    });
+    if(!newRows.length){
+      showToast("No new candidates to add — all already exist","err");
+      setImporting(false);
+      return;
+    }
+    const mapped=mapRows(newRows);
+    const error=await insertCandidates(mapped);
+    if(error){
+      showToast("Import failed: "+error.message,"err");
+    } else {
+      setCandidates(prev=>prev?[...prev,...mapped]:mapped);
+      // Auto-distribute new candidates to groups if groups exist
+      if(evalGroups.length>0&&groupCandidates.length>0){
+        // Count candidates per group
+        const groupCounts={};
+        evalGroups.forEach(g=>{groupCounts[g.id]=groupCandidates.filter(gc=>gc.group_id===g.id).length;});
+        // Distribute new candidates to least-loaded groups
+        const newGroupAssignments=[];
+        mapped.forEach(c=>{
+          // Find group with fewest candidates
+          const minGroup=evalGroups.reduce((min,g)=>(groupCounts[g.id]||0)<(groupCounts[min.id]||0)?g:min,evalGroups[0]);
+          newGroupAssignments.push({group_id:minGroup.id,candidate_id:c.id});
+          groupCounts[minGroup.id]=(groupCounts[minGroup.id]||0)+1;
+        });
+        if(newGroupAssignments.length){
+          await sb.from("eval_group_candidates").insert(newGroupAssignments);
+          setGroupCandidates(prev=>[...prev,...newGroupAssignments]);
+        }
+        showToast(`${mapped.length} new candidates added & distributed to groups`,"ok");
+      } else {
+        showToast(`${mapped.length} new candidates added`,"ok");
+      }
+      setShowImport(false);
+    }
+    setImporting(false);
+  },[candidates,evalGroups,groupCandidates]);
 
   const handleScore=useCallback(async(candidateId,questionId,value)=>{
     setAllScores(prev=>{
@@ -1116,7 +1251,7 @@ function AppInner(){
           <button onClick={()=>setSidebarOpen(true)} style={{background:C.navy,color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:700,marginBottom:16}}>☰ Menu</button>
         </div>
 
-        {isPresident&&showImport&&<ImportPanel onImport={handleImport} loading={importing} hasCandidates={!!(candidates?.length)}/>}
+        {isPresident&&showImport&&<ImportPanel onImportReplace={handleImportReplace} onImportAppend={handleImportAppend} loading={importing} hasCandidates={!!(candidates?.length)}/>}
 
         {!candidates&&!showImport&&(
           <div style={{textAlign:"center",padding:"70px 20px"}}>
