@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Papa from "papaparse";
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
@@ -132,6 +132,7 @@ function exportPDF({candidates,allScores,interviewData,chosenCandidates,members,
   </body></html>`;
 
   const w=window.open("","_blank");
+  if(!w){alert("Please allow popups to export PDF.");return;}
   w.document.write(html);
   w.document.close();
 }
@@ -140,7 +141,6 @@ const SUPABASE_URL = "https://cfijvlomsugjwdikphpe.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmaWp2bG9tc3VnandkaWtwaHBlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NzQ5ODAsImV4cCI6MjA5NTA1MDk4MH0.w3z2O8G-A_SWKIXWvG2Ul9dBQZz7VpT-215U0BAK8QI";
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ── CSV column map ────────────────────────────────────────────────────────────
 // ── CSV column mapping (supports both old Google Forms and new Microsoft Forms) ──
 // Microsoft Forms exports use the question text as column headers.
 // We try multiple variants to match flexibly.
@@ -626,7 +626,24 @@ function LoginScreen({members,onLogin}){
 }
 
 // ══ MAIN APP ══════════════════════════════════════════════════════════════════
-export default function App(){
+// Error boundary wrapper
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  render() {
+    if (this.state.hasError) {
+      return React.createElement('div', {style:{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"system-ui,sans-serif",padding:20,textAlign:"center"}},
+        React.createElement('div', {style:{fontSize:48,marginBottom:16}}, '⚠️'),
+        React.createElement('h2', {style:{color:C.navy,margin:"0 0 8px"}}, 'Something went wrong'),
+        React.createElement('p', {style:{color:C.textMid,fontSize:14,marginBottom:16}}, this.state.error?.message || 'Unknown error'),
+        React.createElement('button', {onClick:()=>{this.setState({hasError:false});window.location.reload();},style:{background:C.navy,color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:700,cursor:"pointer"}}, 'Reload')
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function AppInner(){
   const [authed,        setAuthed]        = useState(()=>sessionStorage.getItem("nic_auth")==="1");
   const [members,       setMembers]       = useState([]);
   const [user,          setUser]          = useState(null);
@@ -655,7 +672,6 @@ export default function App(){
   const [groupMembers,  setGroupMembers]  = useState([]);     // [{group_id,member_id}]
   const [groupCandidates,setGroupCandidates]=useState([]);    // [{group_id,candidate_id}]
   const [showAllMode,   setShowAllMode]   = useState(false);
-  const [showGroupMgmt, setShowGroupMgmt] = useState(false);
 
   const showToast=(msg,type="ok")=>{setToast({msg,type});setTimeout(()=>setToast(null),3000);};
 
@@ -786,7 +802,7 @@ export default function App(){
     }));
     let{error}=await sb.from("candidates").insert(mapped);
     if(error?.message?.includes("column")){
-      const fallback=mapped.map(({email,phone,submitted_at,...rest})=>rest);
+      const fallback=mapped.map(({email,phone,submitted_at,comments,b3,...rest})=>rest);
       ({error}=await sb.from("candidates").insert(fallback));
     }
     if(error)showToast("Import failed: "+error.message,"err");
@@ -1326,7 +1342,7 @@ export default function App(){
                 const allSubmitted=cAssign.length===2&&cAssign.every(a=>cFeedback.some(f=>f.interviewer_id===a.interviewer_id));
                 return(
                   <div key={c.id} style={{marginBottom:20}}>
-                    <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",background:C.navy,borderRadius:"11px 11px 0 0",flexWrap:"wrap",gap:8}}>
+                    <div style={{display:"flex",alignItems:"center",padding:"11px 16px",background:C.navy,borderRadius:"11px 11px 0 0",flexWrap:"wrap",gap:8}}>
                       <div style={{flex:1,minWidth:0}}>
                         <span style={{fontWeight:700,color:"#fff",fontSize:14}}>{displayName(c)}</span>
                         <span style={{color:"rgba(255,255,255,0.4)",fontSize:11,marginLeft:8}}>{c.email}</span>
@@ -1447,7 +1463,7 @@ export default function App(){
                   return(
                     <div key={c.id} style={{background:"#fff",border:`2px solid #fcd34d`,borderRadius:12,overflow:"hidden",boxShadow:"0 2px 8px rgba(245,158,11,0.10)"}}>
                       {/* Header */}
-                      <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 20px",background:"linear-gradient(135deg,#0f2952,#2451a0)",flexWrap:"wrap",gap:10}}>
+                      <div style={{display:"flex",alignItems:"center",padding:"14px 20px",background:"linear-gradient(135deg,#0f2952,#2451a0)",flexWrap:"wrap",gap:10}}>
                         <div style={{width:38,height:38,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#fff",flexShrink:0}}>{initials(displayName(c))}</div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontWeight:800,color:"#fff",fontSize:16}}>{displayName(c)}</div>
@@ -1788,4 +1804,8 @@ export default function App(){
       </main>
     </div>
   );
+}
+
+export default function App() {
+  return React.createElement(ErrorBoundary, null, React.createElement(AppInner));
 }
