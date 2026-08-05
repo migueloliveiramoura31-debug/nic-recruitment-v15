@@ -165,13 +165,25 @@ const COL_VARIANTS = {
 // Flexibly find a column value from a CSV row
 function getCol(row, key) {
   const variants = COL_VARIANTS[key] || [];
+  // 1. Exact match first
   for (const v of variants) {
     if (row[v] !== undefined && row[v] !== null) return row[v];
   }
-  // Fuzzy: try partial match on column headers
+  // 2. Fuzzy match — but skip columns that start with "Points -", "Feedback -", or end with a number suffix
   const headers = Object.keys(row);
+  const skipPrefixes = ["points -", "feedback -", "points-", "feedback-"];
   for (const v of variants) {
-    const found = headers.find(h => h.toLowerCase().includes(v.toLowerCase().slice(0, 30)));
+    const found = headers.find(h => {
+      const hl = h.toLowerCase();
+      // Skip metadata columns
+      if (skipPrefixes.some(p => hl.startsWith(p))) return false;
+      // Skip columns like "Name2" when looking for "Name" — require exact or starts-with match
+      if (hl === v.toLowerCase()) return true;
+      if (hl.startsWith(v.toLowerCase()) && (hl.length === v.length || hl[v.length] === " " || hl[v.length] === ",")) return true;
+      // For longer variants (full question text), use includes with min 30 chars
+      if (v.length > 30 && hl.includes(v.toLowerCase().slice(0, 30))) return true;
+      return false;
+    });
     if (found && row[found]) return row[found];
   }
   return "";
