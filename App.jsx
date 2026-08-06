@@ -1457,6 +1457,14 @@ function AppInner(){
                 </div>
               );
             })}
+            {/* Additional comments — not scored, info only */}
+            {selected.comments?.trim()&&(
+              <div style={{background:"#fffbeb",border:`1px solid #fcd34d`,borderRadius:11,padding:20,marginBottom:10}}>
+                <div style={{fontSize:10,color:C.amber,letterSpacing:2,fontWeight:700,marginBottom:10}}>💬 ADDITIONAL COMMENTS / QUESTIONS (not scored)</div>
+                <div style={{fontSize:14,color:C.textMid,lineHeight:1.85,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{selected.comments}</div>
+              </div>
+            )}
+
             {/* Application verdict */}
             {(()=>{
               const myVerdict=appVerdicts.find(v=>v.member_id===user.id&&v.candidate_id===selected.id)?.verdict;
