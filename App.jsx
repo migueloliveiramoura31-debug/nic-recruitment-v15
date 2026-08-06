@@ -995,6 +995,15 @@ function AppInner(){
     await sb.from("application_verdicts").upsert({member_id:user.id,candidate_id:candidateId,verdict},{onConflict:"member_id,candidate_id"});
   },[user]);
 
+  const handleResetEvaluation=useCallback(async(candidateId)=>{
+    // Delete all scores for this member+candidate
+    await sb.from("scores").delete().eq("member_id",user.id).eq("candidate_id",candidateId);
+    await sb.from("application_verdicts").delete().eq("member_id",user.id).eq("candidate_id",candidateId);
+    setAllScores(prev=>prev.filter(s=>!(s.member_id===user.id&&s.candidate_id===candidateId)));
+    setAppVerdicts(prev=>prev.filter(v=>!(v.member_id===user.id&&v.candidate_id===candidateId)));
+    showToast("Evaluation reset","ok");
+  },[user]);
+
   const handleScore=useCallback(async(candidateId,questionId,value)=>{
     setAllScores(prev=>{
       const idx=prev.findIndex(s=>s.member_id===user.id&&s.candidate_id===candidateId&&s.question_id===questionId);
@@ -1467,7 +1476,13 @@ function AppInner(){
               );
             })()}
 
-            <button onClick={()=>{setSelected(null);setView("list");}} style={{background:C.navy,color:"#fff",border:"none",borderRadius:8,padding:"11px 24px",fontSize:14,fontWeight:700,marginTop:6}}>Save & Return →</button>
+            <div style={{display:"flex",gap:10,marginTop:6}}>
+              <button onClick={()=>{setSelected(null);setView("list");}} style={{background:C.navy,color:"#fff",border:"none",borderRadius:8,padding:"11px 24px",fontSize:14,fontWeight:700,flex:1}}>Save & Return →</button>
+              <button onClick={()=>{if(confirm("Reset all your scores and verdict for this candidate?"))handleResetEvaluation(selected.id);}}
+                style={{background:"#fff",color:C.red,border:`1px solid #fca5a5`,borderRadius:8,padding:"11px 16px",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
+                🗑️ Reset
+              </button>
+            </div>
           </div>
         )}
 
