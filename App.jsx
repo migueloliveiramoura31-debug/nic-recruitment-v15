@@ -207,6 +207,11 @@ const VERDICTS = [
   { id:"borderline", label:"Borderline", color:"#d97706", bg:"#fef3c7" },
   { id:"fail",       label:"Fail",       color:"#dc2626", bg:"#fee2e2" },
 ];
+const APP_VERDICTS = [
+  { id:"pass",      label:"Pass",      emoji:"✅", color:"#16a34a", bg:"#dcfce7" },
+  { id:"uncertain", label:"Uncertain", emoji:"🟡", color:"#d97706", bg:"#fef3c7" },
+  { id:"fail",      label:"Fail",      emoji:"❌", color:"#dc2626", bg:"#fee2e2" },
+];
 const C = {
   navy:"#0f2952", navyMid:"#1a3a6b", navyLt:"#2451a0", accent:"#2d6ae0",
   bg:"#f4f6fb", white:"#ffffff", border:"#dde3ef",
@@ -236,6 +241,20 @@ function detectAI(candidate) {
 }
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
+function modeVerdict(candidateId, appVerdicts) {
+  const vs=appVerdicts.filter(v=>v.candidate_id===candidateId).map(v=>v.verdict);
+  if(!vs.length)return null;
+  const counts={};
+  vs.forEach(v=>{counts[v]=(counts[v]||0)+1;});
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+}
+function AppVerdictBadge({verdict}){
+  if(!verdict)return <span style={{color:C.textLt,fontSize:11}}>—</span>;
+  const v=APP_VERDICTS.find(x=>x.id===verdict);
+  if(!v)return null;
+  return <span style={{background:v.bg,color:v.color,border:`1px solid ${v.color}44`,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>{v.emoji} {v.label}</span>;
+}
+
 const aiColor    = p => p==null?C.textLt:p>=70?C.red:p>=40?C.amber:C.green;
 const scoreColor = s => s==null?C.textLt:s>=75?C.green:s>=50?C.amber:C.red;
 const initials   = n => (n||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
@@ -761,6 +780,7 @@ function AppInner(){
   const [chosenSet,     setChosenSet]     = useState({}); // {candidateId: true}
   const [sidebarOpen,   setSidebarOpen]   = useState(false);
   const [deadline,      setDeadline]      = useState("");
+  const [appVerdicts,   setAppVerdicts]   = useState([]); // [{member_id, candidate_id, verdict}]
   const [evalGroups,    setEvalGroups]    = useState([]);     // [{id,name}]
   const [groupMembers,  setGroupMembers]  = useState([]);     // [{group_id,member_id}]
   const [groupCandidates,setGroupCandidates]=useState([]);    // [{group_id,candidate_id}]
@@ -789,7 +809,8 @@ function AppInner(){
       safe(sb.from("eval_groups").select("*")),
       safe(sb.from("eval_group_members").select("*")),
       safe(sb.from("eval_group_candidates").select("*")),
-    ]).then(([c,sc,ai,cfg,ivf,iva,promo,chosen,eg,egm,egc])=>{
+      safe(sb.from("application_verdicts").select("*")),
+    ]).then(([c,sc,ai,cfg,ivf,iva,promo,chosen,eg,egm,egc,av])=>{
       setCandidates(c.length?c:null);
       if(sc.length)setAllScores(sc);
       if(ai.length){const m={};ai.forEach(r=>{m[r.candidate_id]=r;});setAiScores(m);}
@@ -810,6 +831,7 @@ function AppInner(){
       if(eg.length)setEvalGroups(eg);
       if(egm.length)setGroupMembers(egm);
       if(egc.length)setGroupCandidates(egc);
+      if(av.length)setAppVerdicts(av);
       setAppLoading(false);
     }).catch(()=>setAppLoading(false));
   },[user]);
@@ -856,6 +878,13 @@ function AppInner(){
         if(p.eventType==="DELETE")setPromoted(prev=>{const n={...prev};delete n[p.old.candidate_id];return n;});
         else if(p.new)setPromoted(prev=>({...prev,[p.new.candidate_id]:p.new.round}));
       })
+      .on("postgres_changes",{event:"*",schema:"public",table:"application_verdicts"},p=>{
+        setAppVerdicts(prev=>{
+          if(p.eventType==="DELETE")return prev.filter(r=>!(r.member_id===p.old.member_id&&r.candidate_id===p.old.candidate_id));
+          const f=prev.filter(r=>!(r.member_id===p.new.member_id&&r.candidate_id===p.new.candidate_id));
+          return[...f,p.new];
+        });
+      })
       .on("postgres_changes",{event:"*",schema:"public",table:"chosen_candidates"},p=>{
         if(p.eventType==="DELETE")setChosenSet(prev=>{const n={...prev};delete n[p.old.candidate_id];return n;});
         else if(p.new)setChosenSet(prev=>({...prev,[p.new.candidate_id]:true}));
@@ -895,6 +924,7 @@ function AppInner(){
     setImporting(true);
     await Promise.all([
       sb.from("eval_group_candidates").delete().neq("group_id","_"),
+      sb.from("application_verdicts").delete().neq("candidate_id","_"),
       sb.from("chosen_candidates").delete().neq("candidate_id","_"),
       sb.from("interview_feedback").delete().neq("candidate_id","_"),
       sb.from("interview_assignments").delete().neq("candidate_id","_"),
@@ -904,7 +934,7 @@ function AppInner(){
       sb.from("candidates").delete().neq("id","_"),
     ]);
     await sb.from("settings").upsert({key:"revealed",value:"false"},{onConflict:"key"});
-    setAllScores([]); setAiScores({}); setInterviewData([]); setAssignments([]); setPromoted({}); setChosenSet({}); setGroupCandidates([]); setRevealed(false);
+    setAllScores([]); setAiScores({}); setInterviewData([]); setAssignments([]); setPromoted({}); setChosenSet({}); setGroupCandidates([]); setAppVerdicts([]); setRevealed(false);
     const mapped=mapRows(rows);
     const error=await insertCandidates(mapped);
     if(error)showToast("Import failed: "+error.message,"err");
@@ -956,6 +986,14 @@ function AppInner(){
     }
     setImporting(false);
   },[candidates,evalGroups,groupCandidates]);
+
+  const handleAppVerdict=useCallback(async(candidateId,verdict)=>{
+    setAppVerdicts(prev=>{
+      const f=prev.filter(r=>!(r.member_id===user.id&&r.candidate_id===candidateId));
+      return[...f,{member_id:user.id,candidate_id:candidateId,verdict}];
+    });
+    await sb.from("application_verdicts").upsert({member_id:user.id,candidate_id:candidateId,verdict},{onConflict:"member_id,candidate_id"});
+  },[user]);
 
   const handleScore=useCallback(async(candidateId,questionId,value)=>{
     setAllScores(prev=>{
@@ -1313,7 +1351,10 @@ function AppInner(){
                       {QUESTIONS.map(q=>{const sc=cs.find(x=>x.question_id===q.id);return<span key={q.id} title={q.label} style={{width:24,height:24,borderRadius:5,background:sc!=null?C.navy:"#f1f5f9",border:`1px solid ${sc!=null?C.navy:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:sc!=null?"#fff":C.textLt,fontWeight:800}}>{sc!=null?fmtScore(sc.score):"·"}</span>;})}
                     </span>
                     <span className="hide-mobile" style={{flex:0.5}}>{c.cv_link?<a href={c.cv_link} target="_blank" rel="noopener noreferrer" style={{color:C.accent,fontSize:12,textDecoration:"none",fontWeight:600}}>CV ↗</a>:<span style={{color:C.border,fontSize:12}}>—</span>}</span>
-                    <span style={{flex:0.8,textAlign:"right"}}><button onClick={()=>{setSelected(c);setView("evaluate");if(!aiScores[c.id])runDetection(c);}} style={{background:done?"#dcfce7":C.bg,color:done?C.green:C.navy,border:`1px solid ${done?"#86efac":C.border}`,borderRadius:6,padding:"5px 11px",fontSize:11,fontWeight:700}}>{done?"✓ Edit":"Evaluate"}</button></span>
+                    <span style={{flex:0.8,textAlign:"right",display:"flex",alignItems:"center",gap:4,justifyContent:"flex-end"}}>
+                      {(()=>{const mv=appVerdicts.find(v=>v.member_id===user.id&&v.candidate_id===c.id);return mv?<AppVerdictBadge verdict={mv.verdict}/>:null;})()}
+                      <button onClick={()=>{setSelected(c);setView("evaluate");if(!aiScores[c.id])runDetection(c);}} style={{background:done?"#dcfce7":C.bg,color:done?C.green:C.navy,border:`1px solid ${done?"#86efac":C.border}`,borderRadius:6,padding:"5px 11px",fontSize:11,fontWeight:700}}>{done?"✓ Edit":"Evaluate"}</button>
+                    </span>
                   </div>
                 );
               })}
@@ -1407,6 +1448,25 @@ function AppInner(){
                 </div>
               );
             })}
+            {/* Application verdict */}
+            {(()=>{
+              const myVerdict=appVerdicts.find(v=>v.member_id===user.id&&v.candidate_id===selected.id)?.verdict;
+              return(
+                <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:11,padding:20,marginBottom:10,boxShadow:"0 1px 3px rgba(0,0,0,0.03)"}}>
+                  <div style={{fontSize:10,color:C.navy,letterSpacing:2,fontWeight:700,marginBottom:12}}>YOUR OVERALL VERDICT</div>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {APP_VERDICTS.map(v=>(
+                      <button key={v.id} onClick={()=>handleAppVerdict(selected.id,v.id)}
+                        style={{flex:"1 1 100px",padding:"12px 10px",borderRadius:9,border:`2px solid ${myVerdict===v.id?v.color:C.border}`,background:myVerdict===v.id?v.bg:"#fff",color:myVerdict===v.id?v.color:C.textMid,fontWeight:700,fontSize:14,cursor:"pointer",textAlign:"center"}}>
+                        {v.emoji} {v.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{fontSize:11,color:C.textLt,marginTop:8,marginBottom:0}}>Rate the candidate's overall potential beyond just the written answers.</p>
+                </div>
+              );
+            })()}
+
             <button onClick={()=>{setSelected(null);setView("list");}} style={{background:C.navy,color:"#fff",border:"none",borderRadius:8,padding:"11px 24px",fontSize:14,fontWeight:700,marginTop:6}}>Save & Return →</button>
           </div>
         )}
@@ -1448,6 +1508,7 @@ function AppInner(){
                           <div style={{fontSize:11,color:C.textLt,marginTop:1}}>{c.email} <span style={{color:C.accent}}>· view answers</span></div>
                         </div>
                         <AiBadge pct={ai?.overall_pct??null}/>
+                        <AppVerdictBadge verdict={modeVerdict(c.id,appVerdicts)}/>
                         {c.cv_link&&<a href={c.cv_link} target="_blank" rel="noopener noreferrer" style={{color:C.accent,fontSize:12,textDecoration:"none",fontWeight:600}} className="hide-mobile">CV ↗</a>}
                         {isPresident&&(
                           <div style={{display:"flex",gap:5,flexShrink:0,alignItems:"center",flexWrap:"wrap"}}>
