@@ -797,10 +797,22 @@ function AppInner(){
     setAppLoading(true);
     // Safe loader — if a table doesn't exist, returns empty array instead of crashing
     const safe=async(query)=>{try{const r=await query;return r.data||[];}catch{return[];}};
+    // Paginated loader for large tables (Supabase caps at 1000 rows per query)
+    const loadAll=async(table,orderCol)=>{
+      let all=[],from=0,pageSize=1000,hasMore=true;
+      while(hasMore){
+        try{
+          const {data}=await sb.from(table).select("*").range(from,from+pageSize-1);
+          if(data&&data.length){all=[...all,...data];from+=pageSize;if(data.length<pageSize)hasMore=false;}
+          else hasMore=false;
+        }catch{hasMore=false;}
+      }
+      return all;
+    };
     Promise.all([
       safe(sb.from("candidates").select("*").order("student_number")),
-      safe(sb.from("scores").select("*").limit(50000)),
-      safe(sb.from("ai_scores").select("*").limit(50000)),
+      loadAll("scores"),
+      safe(sb.from("ai_scores").select("*").limit(5000)),
       safe(sb.from("settings").select("*")),
       safe(sb.from("interview_feedback").select("*").limit(10000)),
       safe(sb.from("interview_assignments").select("*").limit(10000)),
@@ -809,7 +821,7 @@ function AppInner(){
       safe(sb.from("eval_groups").select("*")),
       safe(sb.from("eval_group_members").select("*")),
       safe(sb.from("eval_group_candidates").select("*").limit(50000)),
-      safe(sb.from("application_verdicts").select("*").limit(50000)),
+      loadAll("application_verdicts"),
     ]).then(([c,sc,ai,cfg,ivf,iva,promo,chosen,eg,egm,egc,av])=>{
       console.log("[NIC DEBUG] Load complete:",{candidates:c.length,scores:sc.length,ai:ai.length,verdicts:av.length});
       if(sc.length){
