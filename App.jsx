@@ -369,7 +369,7 @@ function AssignModal({assignModal,candidates,assignments,members,onAssign,onClos
   const round=assignModal?.round||"interview";
   const current=useMemo(()=>assignments.filter(a=>a.candidate_id===assignModal?.id&&a.round===round).map(a=>a.interviewer_id),[assignments,assignModal,round]);
   const [sel,setSel]=useState(current);
-  const eligible=round==="president"?members.filter(m=>m.role==="president"):members.filter(m=>m.role!=="president");
+  const eligible=round==="president"?members.filter(m=>m.role==="president"):members;
   if(!candidate)return null;
   const maxSel=2;
   return(
@@ -992,7 +992,12 @@ function AppInner(){
       const f=prev.filter(r=>!(r.member_id===user.id&&r.candidate_id===candidateId));
       return[...f,{member_id:user.id,candidate_id:candidateId,verdict}];
     });
-    await sb.from("application_verdicts").upsert({member_id:user.id,candidate_id:candidateId,verdict},{onConflict:"member_id,candidate_id"});
+    for(let attempt=0;attempt<3;attempt++){
+      const {error}=await sb.from("application_verdicts").upsert({member_id:user.id,candidate_id:candidateId,verdict},{onConflict:"member_id,candidate_id"});
+      if(!error)return;
+      if(attempt<2)await new Promise(r=>setTimeout(r,500*(attempt+1)));
+      if(attempt===2)showToast("⚠️ Verdict failed to save — try again","err");
+    }
   },[user]);
 
   const handleResetEvaluation=useCallback(async(candidateId)=>{
@@ -1005,12 +1010,20 @@ function AppInner(){
   },[user]);
 
   const handleScore=useCallback(async(candidateId,questionId,value)=>{
+    // Optimistic update
     setAllScores(prev=>{
       const idx=prev.findIndex(s=>s.member_id===user.id&&s.candidate_id===candidateId&&s.question_id===questionId);
       const row={member_id:user.id,candidate_id:candidateId,question_id:questionId,score:value,id:`opt_${Date.now()}`};
       return idx>=0?prev.map((s,i)=>i===idx?{...s,score:value}:s):[...prev,row];
     });
-    await sb.from("scores").upsert({member_id:user.id,candidate_id:candidateId,question_id:questionId,score:value,updated_at:new Date().toISOString()},{onConflict:"member_id,candidate_id,question_id"});
+    // Save with retry (up to 3 attempts)
+    const payload={member_id:user.id,candidate_id:candidateId,question_id:questionId,score:value,updated_at:new Date().toISOString()};
+    for(let attempt=0;attempt<3;attempt++){
+      const {error}=await sb.from("scores").upsert(payload,{onConflict:"member_id,candidate_id,question_id"});
+      if(!error)return; // success
+      if(attempt<2)await new Promise(r=>setTimeout(r,500*(attempt+1))); // wait before retry
+      if(attempt===2)showToast("⚠️ Score failed to save — try again","err");
+    }
   },[user]);
 
   const runDetection=useCallback(async candidate=>{
@@ -1058,12 +1071,16 @@ function AppInner(){
   },[]);
   const handleInterviewSave=useCallback(async(data)=>{
     const payload={...data,updated_at:new Date().toISOString()};
-    await sb.from("interview_feedback").upsert(payload,{onConflict:"candidate_id,interviewer_id,round"});
     setInterviewData(prev=>{
       const f=prev.filter(r=>!(r.interviewer_id===data.interviewer_id&&r.candidate_id===data.candidate_id&&r.round===data.round));
       return[...f,payload];
     });
-    showToast("Feedback saved","ok");
+    for(let attempt=0;attempt<3;attempt++){
+      const {error}=await sb.from("interview_feedback").upsert(payload,{onConflict:"candidate_id,interviewer_id,round"});
+      if(!error){showToast("Feedback saved","ok");return;}
+      if(attempt<2)await new Promise(r=>setTimeout(r,500*(attempt+1)));
+      if(attempt===2)showToast("⚠️ Feedback failed to save — try again","err");
+    }
   },[]);
   const handleSetDeadline=useCallback(async(date)=>{
     setDeadline(date);
@@ -1140,7 +1157,7 @@ function AppInner(){
   },[chosenSet]);
 
   // ── Derived ──────────────────────────────────────────────────────────────
-  const isPresident=user?.role==="president";
+  const isPresident=user?.role==="president"||user?.role==="head";
   const myScores=useMemo(()=>allScores.filter(s=>s.member_id===user?.id),[allScores,user]);
 
   // Group filtering — must be defined before progress
@@ -1231,7 +1248,8 @@ function AppInner(){
           <div style={{width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#fff",flexShrink:0}}>{initials(user.name)}</div>
           <div style={{minWidth:0}}>
             <div style={{fontSize:12,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
-            {isPresident&&<div style={{fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:1}}>CO-PRESIDENT</div>}
+            {user?.role==="president"&&<div style={{fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:1}}>CO-PRESIDENT</div>}
+            {user?.role==="head"&&<div style={{fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:1}}>HEAD</div>}
           </div>
         </div>
         <nav style={{display:"flex",flexDirection:"column",gap:2,margin:"14px 8px 0"}}>
