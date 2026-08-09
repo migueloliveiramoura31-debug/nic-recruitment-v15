@@ -799,17 +799,17 @@ function AppInner(){
     const safe=async(query)=>{try{const r=await query;return r.data||[];}catch{return[];}};
     Promise.all([
       safe(sb.from("candidates").select("*").order("student_number")),
-      safe(sb.from("scores").select("*")),
-      safe(sb.from("ai_scores").select("*")),
+      safe(sb.from("scores").select("*").limit(50000)),
+      safe(sb.from("ai_scores").select("*").limit(50000)),
       safe(sb.from("settings").select("*")),
-      safe(sb.from("interview_feedback").select("*")),
-      safe(sb.from("interview_assignments").select("*")),
+      safe(sb.from("interview_feedback").select("*").limit(10000)),
+      safe(sb.from("interview_assignments").select("*").limit(10000)),
       safe(sb.from("candidate_promotions").select("*")),
       safe(sb.from("chosen_candidates").select("*")),
       safe(sb.from("eval_groups").select("*")),
       safe(sb.from("eval_group_members").select("*")),
-      safe(sb.from("eval_group_candidates").select("*")),
-      safe(sb.from("application_verdicts").select("*")),
+      safe(sb.from("eval_group_candidates").select("*").limit(50000)),
+      safe(sb.from("application_verdicts").select("*").limit(50000)),
     ]).then(([c,sc,ai,cfg,ivf,iva,promo,chosen,eg,egm,egc,av])=>{
       console.log("[NIC DEBUG] Load complete:",{candidates:c.length,scores:sc.length,ai:ai.length,verdicts:av.length});
       if(sc.length){
