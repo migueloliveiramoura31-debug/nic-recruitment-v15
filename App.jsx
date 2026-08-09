@@ -811,6 +811,17 @@ function AppInner(){
       safe(sb.from("eval_group_candidates").select("*")),
       safe(sb.from("application_verdicts").select("*")),
     ]).then(([c,sc,ai,cfg,ivf,iva,promo,chosen,eg,egm,egc,av])=>{
+      console.log("[NIC DEBUG] Load complete:",{candidates:c.length,scores:sc.length,ai:ai.length,verdicts:av.length});
+      if(sc.length){
+        // Count scores per member
+        const byMember={};
+        sc.forEach(s=>{byMember[s.member_id]=(byMember[s.member_id]||0)+1;});
+        console.log("[NIC DEBUG] Scores per member:",byMember);
+        // Check for orphan scores
+        const cIds=new Set(c.map(x=>x.id));
+        const orphans=sc.filter(s=>!cIds.has(s.candidate_id));
+        if(orphans.length)console.warn("[NIC DEBUG] ORPHAN SCORES (candidate_id not in candidates):",orphans.length);
+      }
       setCandidates(c.length?c:null);
       if(sc.length)setAllScores(sc);
       if(ai.length){const m={};ai.forEach(r=>{m[r.candidate_id]=r;});setAiScores(m);}
