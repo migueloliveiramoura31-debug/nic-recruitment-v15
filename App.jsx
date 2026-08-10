@@ -1572,7 +1572,20 @@ function AppInner(){
                           <div style={{fontSize:11,color:C.textLt,marginTop:1}}>{c.email} <span style={{color:C.accent}}>· view answers</span></div>
                         </div>
                         <AiBadge pct={ai?.overall_pct??null}/>
-                        <AppVerdictBadge verdict={modeVerdict(c.id,appVerdicts)}/>
+                        {(()=>{
+                          const vs=appVerdicts.filter(v=>v.candidate_id===c.id);
+                          if(!vs.length)return <span style={{color:C.textLt,fontSize:11}}>—</span>;
+                          const total=vs.length;
+                          const counts={pass:0,uncertain:0,fail:0};
+                          vs.forEach(v=>{if(counts[v.verdict]!==undefined)counts[v.verdict]++;});
+                          return(
+                            <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
+                              {counts.pass>0&&<span style={{background:"#dcfce7",color:"#16a34a",borderRadius:12,padding:"2px 7px",fontSize:10,fontWeight:700}}>✅{Math.round(counts.pass/total*100)}%</span>}
+                              {counts.uncertain>0&&<span style={{background:"#fef3c7",color:"#d97706",borderRadius:12,padding:"2px 7px",fontSize:10,fontWeight:700}}>🟡{Math.round(counts.uncertain/total*100)}%</span>}
+                              {counts.fail>0&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:12,padding:"2px 7px",fontSize:10,fontWeight:700}}>❌{Math.round(counts.fail/total*100)}%</span>}
+                            </div>
+                          );
+                        })()}
                         {c.cv_link&&<a href={c.cv_link} target="_blank" rel="noopener noreferrer" style={{color:C.accent,fontSize:12,textDecoration:"none",fontWeight:600}} className="hide-mobile">CV ↗</a>}
                         {isPresident&&(
                           <div style={{display:"flex",gap:5,flexShrink:0,alignItems:"center",flexWrap:"wrap"}}>
