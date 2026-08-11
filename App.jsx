@@ -1647,10 +1647,22 @@ function AppInner(){
                         </div>
                       )}
                     </div>
-                    {isPresident
-                      ?<FeedbackView candidate={c} interviewData={interviewData} members={members} round="interview" onViewAnswers={setAnswersModal}/>
-                      :amAssigned
-                        ?<InterviewForm candidate={c} interviewData={interviewData} user={user} onSave={handleInterviewSave} round="interview" onViewAnswers={setAnswersModal}/>
+                    {amAssigned
+                      ?<>
+                        <InterviewForm candidate={c} interviewData={interviewData} user={user} onSave={handleInterviewSave} round="interview" onViewAnswers={setAnswersModal}/>
+                        {/* If head/president, also show other interviewer's feedback below */}
+                        {isPresident&&(()=>{
+                          const otherFeedback=interviewData.filter(i=>i.candidate_id===c.id&&i.round==="interview"&&i.interviewer_id!==user.id);
+                          return otherFeedback.length>0?(
+                            <div style={{marginTop:2}}>
+                              <div style={{padding:"9px 16px",background:"#eff6ff",fontSize:10,color:C.navy,letterSpacing:1,fontWeight:700}}>OTHER INTERVIEWER'S FEEDBACK</div>
+                              <FeedbackView candidate={c} interviewData={interviewData.filter(f=>f.interviewer_id!==user.id)} members={members} round="interview" onViewAnswers={setAnswersModal}/>
+                            </div>
+                          ):null;
+                        })()}
+                      </>
+                      :isPresident
+                        ?<FeedbackView candidate={c} interviewData={interviewData} members={members} round="interview" onViewAnswers={setAnswersModal}/>
                         :<div style={{padding:16,background:"#fff",border:`1px solid ${C.border}`,borderTop:"none",borderRadius:"0 0 11px 11px",color:C.textLt,fontSize:13,textAlign:"center"}}>You are not assigned to interview this candidate.</div>
                     }
                   </div>
