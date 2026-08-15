@@ -1650,8 +1650,8 @@ function AppInner(){
                     {amAssigned
                       ?<>
                         <InterviewForm candidate={c} interviewData={interviewData} user={user} onSave={handleInterviewSave} round="interview" onViewAnswers={setAnswersModal}/>
-                        {/* If head/president, also show other interviewer's feedback below */}
-                        {isPresident&&(()=>{
+                        {/* Show other interviewer's feedback below */}
+                        {(()=>{
                           const otherFeedback=interviewData.filter(i=>i.candidate_id===c.id&&i.round==="interview"&&i.interviewer_id!==user.id);
                           return otherFeedback.length>0?(
                             <div style={{marginTop:2}}>
@@ -1661,9 +1661,7 @@ function AppInner(){
                           ):null;
                         })()}
                       </>
-                      :isPresident
-                        ?<FeedbackView candidate={c} interviewData={interviewData} members={members} round="interview" onViewAnswers={setAnswersModal}/>
-                        :<div style={{padding:16,background:"#fff",border:`1px solid ${C.border}`,borderTop:"none",borderRadius:"0 0 11px 11px",color:C.textLt,fontSize:13,textAlign:"center"}}>You are not assigned to interview this candidate.</div>
+                      :<FeedbackView candidate={c} interviewData={interviewData} members={members} round="interview" onViewAnswers={setAnswersModal}/>
                     }
                   </div>
                 );
