@@ -4,68 +4,123 @@ import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
 
 // ── Export helpers ────────────────────────────────────────────────────────────
-function exportExcel({candidates,allScores,interviewData,chosenCandidates,members,aiScores,promoted}){
+function exportExcel({candidates,allScores,interviewData,chosenCandidates,members,aiScores,promoted,appVerdicts,QUESTIONS}){
   const wb=XLSX.utils.book_new();
+  const dn=(c)=>c?.full_name&&c.full_name!==c.student_number?c.full_name:c?.student_number||"";
 
-  // Sheet 1: All candidates with scores
-  const appRows=candidates.map((c,i)=>{
-    const avg=allScores.filter(s=>s.candidate_id===c.id);
-    const score=avg.length?((avg.reduce((a,r)=>a+parseFloat(r.score),0)/avg.length/4)*100).toFixed(1):null;
+  // Sheet 1: Overview — all candidates ranked with full status
+  const ranked=[...candidates].map(c=>{
+    const sc=allScores.filter(s=>s.candidate_id===c.id);
+    const avg=sc.length?((sc.reduce((a,r)=>a+parseFloat(r.score),0)/sc.length/4)*100).toFixed(1):null;
     const ai=aiScores[c.id];
-    return{
-      Rank:i+1,
-      "Student No":c.student_number,
-      Name:c.full_name!==c.student_number?c.full_name:"",
-      Email:c.email,
-      "Avg Score (%)":score?parseFloat(score):null,
+    const vs=appVerdicts.filter(v=>v.candidate_id===c.id);
+    const vTotal=vs.length;
+    const vPass=vs.filter(v=>v.verdict==="pass").length;
+    const vUncertain=vs.filter(v=>v.verdict==="uncertain").length;
+    const vFail=vs.filter(v=>v.verdict==="fail").length;
+    const memIv=interviewData.filter(f=>f.candidate_id===c.id&&f.round==="interview");
+    const presIv=interviewData.filter(f=>f.candidate_id===c.id&&f.round==="president");
+    return{avg:parseFloat(avg)||0,row:{
+      "Name":dn(c),"Student ID":c.student_number,"Email":c.email,"Phone":c.phone||"",
+      "App Score (%)":avg?parseFloat(avg):null,
       "AI Detection (%)":ai?.overall_pct??null,
-      "Round":promoted[c.id]||"Application only",
-      "Chosen":chosenCandidates.some(x=>x.id===c.id)?"Yes":"No",
-    };
-  });
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(appRows),"Applications");
+      "Pass %":vTotal?Math.round(vPass/vTotal*100):null,
+      "Uncertain %":vTotal?Math.round(vUncertain/vTotal*100):null,
+      "Fail %":vTotal?Math.round(vFail/vTotal*100):null,
+      "Evaluators":vTotal,
+      "Stage":promoted[c.id]==="president"?"Final Round":promoted[c.id]==="interview"?"Interview":"Application",
+      "Chosen":chosenCandidates.some(x=>x.id===c.id)?"YES":"",
+      "Interview Verdict 1":memIv[0]?.verdict||"","Interviewer 1":memIv[0]?members.find(m=>m.id===memIv[0].interviewer_id)?.name||"":"",
+      "Interview Verdict 2":memIv[1]?.verdict||"","Interviewer 2":memIv[1]?members.find(m=>m.id===memIv[1].interviewer_id)?.name||"":"",
+      "Final Verdict":presIv[0]?.verdict||"",
+    }};
+  }).sort((a,b)=>b.avg-a.avg);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(ranked.map((r,i)=>({Rank:i+1,...r.row}))),"Overview");
 
-  // Sheet 2: Interview feedback
+  // Sheet 2: Candidate Answers — full text of every answer
+  const answerRows=candidates.map(c=>({
+    "Name":dn(c),"Student ID":c.student_number,"Email":c.email,
+    "B1 - About Yourself":c.b1||"","B2 - Why NIC-UD":c.b2||"",
+    "B3 - Beyond Required":c.b3||"","T1 - Technical":c.t1||"",
+    "Additional Comments":c.comments||"",
+    "CV Link":c.cv_link||"",
+  }));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(answerRows),"Candidate Answers");
+
+  // Sheet 3: Individual Scores — every member's score for every candidate
+  const scoreRows=[];
+  candidates.forEach(c=>{
+    const cScores=allScores.filter(s=>s.candidate_id===c.id);
+    const memberIds=[...new Set(cScores.map(s=>s.member_id))];
+    memberIds.forEach(mid=>{
+      const ms=cScores.filter(s=>s.member_id===mid);
+      const member=members.find(m=>m.id===mid);
+      const verdict=appVerdicts.find(v=>v.member_id===mid&&v.candidate_id===c.id);
+      const row={"Candidate":dn(c),"Student ID":c.student_number,"Evaluator":member?.name||mid};
+      QUESTIONS.forEach(q=>{const s=ms.find(x=>x.question_id===q.id);row[q.label]=s?parseFloat(s.score):null;});
+      row["Verdict"]=verdict?.verdict||"";
+      scoreRows.push(row);
+    });
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(scoreRows),"Individual Scores");
+
+  // Sheet 4: Interview Feedback — all feedback from all rounds
   const ivRows=interviewData.map(iv=>{
     const member=members.find(m=>m.id===iv.interviewer_id);
     const candidate=candidates.find(c=>c.id===iv.candidate_id);
     return{
-      "Student No":candidate?.student_number||iv.candidate_id,
-      "Name":candidate?.full_name!==candidate?.student_number?candidate?.full_name:"",
+      "Candidate":dn(candidate),"Student ID":candidate?.student_number||"",
       "Round":iv.round==="president"?"Final Round":"Member Interview",
       "Interviewer":member?.name||iv.interviewer_id,
-      "Personal":iv.personal_score,
-      "Technical":iv.technical_score,
-      "Brainstormer":iv.brainstormer_score,
-      "Verdict":iv.verdict,
       "Interview Date":iv.interview_date||"",
+      "Personal":iv.personal_score,"Technical":iv.technical_score,"Brainstormer":iv.brainstormer_score,
+      "Avg":iv.personal_score!=null&&iv.technical_score!=null&&iv.brainstormer_score!=null
+        ?((parseFloat(iv.personal_score)+parseFloat(iv.technical_score)+parseFloat(iv.brainstormer_score))/3).toFixed(1):null,
+      "Verdict":iv.verdict||"",
       "Feedback":iv.feedback||"",
     };
   });
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(ivRows),"Interview Feedback");
 
-  // Sheet 3: Chosen candidates summary
+  // Sheet 5: Chosen — final summary of accepted candidates
   const chosenRows=chosenCandidates.map(c=>{
-    const presIv=interviewData.filter(f=>f.candidate_id===c.id&&f.round==="president");
+    const sc=allScores.filter(s=>s.candidate_id===c.id);
+    const appScore=sc.length?((sc.reduce((a,r)=>a+parseFloat(r.score),0)/sc.length/4)*100).toFixed(1):null;
     const memIv=interviewData.filter(f=>f.candidate_id===c.id&&f.round==="interview");
-    const avg=allScores.filter(s=>s.candidate_id===c.id);
-    const appScore=avg.length?((avg.reduce((a,r)=>a+parseFloat(r.score),0)/avg.length/4)*100).toFixed(1):null;
+    const presIv=interviewData.filter(f=>f.candidate_id===c.id&&f.round==="president");
+    const vs=appVerdicts.filter(v=>v.candidate_id===c.id);
     return{
-      "Student No":c.student_number,
-      "Name":c.full_name!==c.student_number?c.full_name:"",
-      "Email":c.email,
+      "Name":dn(c),"Student ID":c.student_number,"Email":c.email,"Phone":c.phone||"",
       "App Score (%)":appScore?parseFloat(appScore):null,
-      "Member Verdict 1":memIv[0]?.verdict||"",
-      "Member Verdict 2":memIv[1]?.verdict||"",
-      "President Verdict":presIv[0]?.verdict||"",
-      "Final Personal":presIv[0]?.personal_score||"",
-      "Final Technical":presIv[0]?.technical_score||"",
-      "Final Brainstormer":presIv[0]?.brainstormer_score||"",
+      "App Pass %":vs.length?Math.round(vs.filter(v=>v.verdict==="pass").length/vs.length*100):null,
+      "Interviewer 1":memIv[0]?members.find(m=>m.id===memIv[0].interviewer_id)?.name||"":"",
+      "IV1 Personal":memIv[0]?.personal_score||"","IV1 Technical":memIv[0]?.technical_score||"","IV1 Brainstormer":memIv[0]?.brainstormer_score||"","IV1 Verdict":memIv[0]?.verdict||"",
+      "Interviewer 2":memIv[1]?members.find(m=>m.id===memIv[1].interviewer_id)?.name||"":"",
+      "IV2 Personal":memIv[1]?.personal_score||"","IV2 Technical":memIv[1]?.technical_score||"","IV2 Brainstormer":memIv[1]?.brainstormer_score||"","IV2 Verdict":memIv[1]?.verdict||"",
+      "Final Interviewer":presIv[0]?members.find(m=>m.id===presIv[0].interviewer_id)?.name||"":"",
+      "Final Personal":presIv[0]?.personal_score||"","Final Technical":presIv[0]?.technical_score||"","Final Brainstormer":presIv[0]?.brainstormer_score||"","Final Verdict":presIv[0]?.verdict||"",
+      "Final Feedback":presIv[0]?.feedback||"",
+      "CV":c.cv_link||"",
     };
   });
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(chosenRows),"Chosen Candidates");
 
-  XLSX.writeFile(wb,`NIC-UD_Recruitment_${new Date().toISOString().slice(0,10)}.xlsx`);
+  // Sheet 6: Process Stats
+  const statsRows=[
+    {"Metric":"Total Candidates","Value":candidates.length},
+    {"Metric":"Promoted to Interview","Value":candidates.filter(c=>promoted[c.id]==="interview"||promoted[c.id]==="president").length},
+    {"Metric":"Promoted to Final Round","Value":candidates.filter(c=>promoted[c.id]==="president").length},
+    {"Metric":"Chosen","Value":chosenCandidates.length},
+    {"Metric":"Conversion Rate (Interview)","Value":candidates.length?Math.round(candidates.filter(c=>promoted[c.id]).length/candidates.length*100)+"%":""},
+    {"Metric":"Conversion Rate (Final)","Value":candidates.filter(c=>promoted[c.id]).length?Math.round(candidates.filter(c=>promoted[c.id]==="president").length/candidates.filter(c=>promoted[c.id]).length*100)+"%":""},
+    {"Metric":"Conversion Rate (Chosen)","Value":candidates.filter(c=>promoted[c.id]==="president").length?Math.round(chosenCandidates.length/candidates.filter(c=>promoted[c.id]==="president").length*100)+"%":""},
+    {"Metric":"Total Evaluations","Value":allScores.length},
+    {"Metric":"Total Interviews","Value":interviewData.length},
+    {"Metric":"Members Involved","Value":[...new Set(allScores.map(s=>s.member_id))].length},
+  ];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(statsRows),"Process Stats");
+
+  XLSX.writeFile(wb,`NIC-UD_Recruitment_Process_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 function exportPDF({candidates,allScores,interviewData,chosenCandidates,members,aiScores,promoted,ranked}){
@@ -1636,16 +1691,14 @@ function AppInner(){
                         {assignedNames.map((n,i)=><span key={i} style={{background:"rgba(255,255,255,0.15)",color:"#fff",borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:600}}>{n.split(" ")[0]}</span>)}
                         {allSubmitted&&<span style={{background:"#dcfce7",color:C.green,borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:700}}>✓ Done</span>}
                       </div>
-                      {isPresident&&(
-                        <div style={{display:"flex",gap:5}}>
-                          <button onClick={()=>setAssignModal({id:c.id,round:"interview"})} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"1px solid rgba(255,255,255,0.2)",borderRadius:6,padding:"5px 10px",fontSize:11,fontWeight:600}}>{cAssign.length===2?"✏️ Reassign":"👥 Assign"}</button>
-                          {promoted[c.id]!=="president"?(
-                            <button onClick={()=>handlePromote(c.id,"president")} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",fontSize:11,fontWeight:700}}>+ Final Round</button>
-                          ):(
-                            <><span style={{background:"#ede9fe",color:"#7c3aed",borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:700}}>👔 Final</span><button onClick={()=>handlePromote(c.id,"interview")} style={{background:"rgba(239,68,68,0.2)",color:"#fca5a5",border:"1px solid rgba(239,68,68,0.3)",borderRadius:6,padding:"5px 9px",fontSize:11,fontWeight:700}}>✕</button></>
-                          )}
-                        </div>
-                      )}
+                      <div style={{display:"flex",gap:5}}>
+                        {isPresident&&<button onClick={()=>setAssignModal({id:c.id,round:"interview"})} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"1px solid rgba(255,255,255,0.2)",borderRadius:6,padding:"5px 10px",fontSize:11,fontWeight:600}}>{cAssign.length===2?"✏️ Reassign":"👥 Assign"}</button>}
+                        {promoted[c.id]!=="president"?(
+                          <button onClick={()=>handlePromote(c.id,"president")} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",fontSize:11,fontWeight:700}}>+ Final Round</button>
+                        ):(
+                          <><span style={{background:"#ede9fe",color:"#7c3aed",borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:700}}>👔 Final</span>{isPresident&&<button onClick={()=>handlePromote(c.id,"interview")} style={{background:"rgba(239,68,68,0.2)",color:"#fca5a5",border:"1px solid rgba(239,68,68,0.3)",borderRadius:6,padding:"5px 9px",fontSize:11,fontWeight:700}}>✕</button>}</>
+                        )}
+                      </div>
                     </div>
                     {amAssigned
                       ?<>
@@ -1954,7 +2007,7 @@ function AppInner(){
                 <p style={{color:C.textMid,fontSize:13,marginTop:3}}>Recruitment cycle overview</p>
               </div>
               <div style={{display:"flex",gap:8}}>
-                <button onClick={()=>exportExcel({candidates,allScores,interviewData,chosenCandidates,members,aiScores,promoted})}
+                <button onClick={()=>exportExcel({candidates,allScores,interviewData,chosenCandidates,members,aiScores,promoted,appVerdicts,QUESTIONS})}
                   style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:8,padding:"9px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
                   ⬇️ Export Excel
                 </button>
